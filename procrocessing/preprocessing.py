@@ -149,11 +149,11 @@ def main():
 
     img_mosaic, mask_mosaic, transform, crs = load_data(data_dir)
 
-    # dem = img_mosaic[6]
-    #
-    # terrain_features = compute_terrain_features(dem, transform, crs)
-    #
-    # extract_patches(img_mosaic, mask_mosaic, terrain_features)
+    dem = img_mosaic[6]
+
+    terrain_features = compute_terrain_features(dem, transform, crs)
+
+    extract_patches(img_mosaic, mask_mosaic, terrain_features)
 
 
 if __name__ == "__main__":
