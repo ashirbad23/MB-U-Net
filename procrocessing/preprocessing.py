@@ -97,8 +97,8 @@ def extract_patches(img_mosaic, mask_mosaic, terrain_features):
     slope, aspect_sin, aspect_cos, profile_curv, plan_curv, \
     mean_curv, gaussian_curv, slope_azimuth_divergence, unsphericity = terrain_features
 
-    os.makedirs("dataset/images", exist_ok=True)
-    os.makedirs("dataset/masks", exist_ok=True)
+    os.makedirs("../dataset/images", exist_ok=True)
+    os.makedirs("../dataset/masks", exist_ok=True)
 
     _, H, W = img_mosaic.shape
 
@@ -149,12 +149,13 @@ def main():
 
     img_mosaic, mask_mosaic, transform, crs = load_data(data_dir)
 
-    dem = img_mosaic[6]
-
-    terrain_features = compute_terrain_features(dem, transform, crs)
-
-    extract_patches(img_mosaic, mask_mosaic, terrain_features)
+    # dem = img_mosaic[6]
+    #
+    # terrain_features = compute_terrain_features(dem, transform, crs)
+    #
+    # extract_patches(img_mosaic, mask_mosaic, terrain_features)
 
 
 if __name__ == "__main__":
-    main()
+    # main()
+    print(os.listdir())
