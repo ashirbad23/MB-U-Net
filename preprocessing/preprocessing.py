@@ -131,8 +131,8 @@ def extract_patches(img_mosaic, mask_mosaic, terrain_features):
             r = y // PATCH
             c = x // PATCH
 
-            np.save(f"dataset/images/img_r{r}_c{c}.npy", full_patch.astype(np.float32))
-            np.save(f"dataset/masks/mask_r{r}_c{c}.npy", mask_patch.astype(np.uint8))
+            np.save(f"../dataset/images/img_r{r}_c{c}.npy", full_patch.astype(np.float32))
+            np.save(f"../dataset/masks/mask_r{r}_c{c}.npy", mask_patch.astype(np.uint8))
 
             counter += 1
 
@@ -157,5 +157,4 @@ def main():
 
 
 if __name__ == "__main__":
-    # main()
-    print(os.listdir())
+    main()
