@@ -3,10 +3,11 @@ from torch.utils.data import Dataset, DataLoader
 import numpy as np
 from pathlib import Path
 import glob
+import json
 
 
 class GlacierDataset(Dataset):
-    def __init__(self, path: Path, transform=None, mode=None, patch_size=512, overlap=1):
+    def __init__(self, path: Path, transform=None, patch_size=512, overlap=1, mode=None, mode_path=None):
         super().__init__()
 
         self.path = Path(path)
@@ -17,14 +18,35 @@ class GlacierDataset(Dataset):
 
         self.samples = []
 
-        self.image_path = self.path / "images"
-        self.masks_path = self.path / "masks"
+        if mode is None:
+            self.image_path = self.path / "images"
+            self.masks_path = self.path / "masks"
 
-        assert self.image_path.exists(), "Images folder missing"
-        assert self.masks_path.exists(), "Masks folder missing"
+            assert self.image_path.exists(), "Images folder missing"
+            assert self.masks_path.exists(), "Masks folder missing"
 
-        self.band_files = sorted(glob.glob(str(self.image_path / "*.npy")))
-        self.mask_files = sorted(glob.glob(str(self.masks_path / "*.npy")))
+            self.band_files = sorted(glob.glob(str(self.image_path / "*.npy")))
+            self.mask_files = sorted(glob.glob(str(self.masks_path / "*.npy")))
+        else:
+            assert mode_path is not None
+
+            mode_path = Path(mode_path)
+            with open(mode_path, "r") as f:
+                split = json.load(f)
+
+            if mode.lower() == 'train':
+                self.band_files = [Path(p) for p in split['train_bands']]
+                self.mask_files = [Path(p) for p in split['train_masks']]
+            elif mode.lower() == 'val':
+                self.band_files = [Path(p) for p in split['val_bands']]
+                self.mask_files = [Path(p) for p in split['val_masks']]
+            else:
+                raise ValueError("Mode can only be None, train, val")
+
+        assert len(self.band_files) == len(self.mask_files)
+
+        for b, m in zip(self.band_files, self.mask_files):
+            assert Path(b).name.replace("img", "mask") == Path(m).name
 
         img = np.load(self.band_files[0])
         _, H, W = img.shape
@@ -58,7 +80,12 @@ class GlacierDataset(Dataset):
 
 
 if __name__ == "__main__":
-    dataset = GlacierDataset(path=Path("E:/Glacier_Image_Segmentation_Research/Glacier-Analogy/dataset"), patch_size=128, overlap=2)
+    dataset = GlacierDataset(path=Path("/Glacier_Image_Segmentation_Research/Glacier-Analogy/dataset"),
+                             patch_size=128,
+                             overlap=2,
+                             mode='train',
+                             mode_path=Path("/Glacier_Image_Segmentation_Research/Glacier-Analogy/config"
+                                            "/train_val_split.json"))
     img, mask = dataset[0]
     print(img.shape, mask.shape)
     print(len(dataset))
