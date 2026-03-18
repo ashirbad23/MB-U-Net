@@ -89,6 +89,54 @@ def compute_terrain_features(dem, transform, crs):
 
 
 # --------------------------------------------------
+# Compute global stats (CORRECT WAY)
+# --------------------------------------------------
+
+def compute_stats_streaming(img_mosaic, terrain_features):
+
+    terrain_stack = np.stack(terrain_features)
+
+    sum_c = None
+    sum_sq_c = None
+    count = 0
+
+    chunk_size = 256  # smaller = safer
+
+    _, H, W = img_mosaic.shape
+
+    for y in range(0, H, chunk_size):
+
+        y_end = min(y + chunk_size, H)
+
+        img_chunk = img_mosaic[:, y:y_end, :]
+        terrain_chunk = terrain_stack[:, y:y_end, :]
+
+        full = np.concatenate([img_chunk, terrain_chunk], axis=0)
+
+        # force float32 (important!)
+        full = full.astype(np.float32)
+
+        full = full.reshape(full.shape[0], -1)
+
+        if sum_c is None:
+            C = full.shape[0]
+            sum_c = np.zeros(C, dtype=np.float64)
+            sum_sq_c = np.zeros(C, dtype=np.float64)
+
+        sum_c += full.sum(axis=1)
+        sum_sq_c += (full ** 2).sum(axis=1)
+        count += full.shape[1]
+
+    mean = sum_c / count
+    std = np.sqrt(sum_sq_c / count - mean**2)
+
+    # avoid division issues
+    std = np.where(std < 1e-6, 1e-6, std)
+
+    return mean.astype(np.float32), std.astype(np.float32)
+
+
+# --------------------------------------------------
 # Patch extraction
 # --------------------------------------------------
 
@@ -153,6 +201,17 @@ def main():
 
     terrain_features = compute_terrain_features(dem, transform, crs)
 
+    # ✅ STEP 1: compute global stats BEFORE filtering
+    mean, std = compute_stats_streaming(img_mosaic, terrain_features)
+
+    os.makedirs("../dataset", exist_ok=True)
+
+    np.save("../dataset/mean.npy", mean)
+    np.save("../dataset/std.npy", std)
+
+    print("Saved mean/std")
+
+    # ✅ STEP 2: extract patches
     extract_patches(img_mosaic, mask_mosaic, terrain_features)
 
 
