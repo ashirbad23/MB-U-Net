@@ -86,20 +86,22 @@ if __name__ == "__main__":
                              mode='train',
                              mode_path=Path("/Glacier_Image_Segmentation_Research/Glacier-Analogy/config"
                                             "/train_val_split.json"))
-    img, mask = dataset[0]
+    img, mask = dataset[1000]
     print(img.shape, mask.shape)
     print(len(dataset))
+    for i in range(img.shape[0]):
+        print(i, img[i].min(), img[i].max())
 
     background = 0
     glacier = 0
 
-    for i in range(len(dataset)):
-        _, mask = dataset[i]
-        if mask.sum() == 0:
-            background += 1
-        else:
-            glacier += 1
-
-    print("background:", background)
-    print("glacier:", glacier)
+    # for i in range(len(dataset)):
+    #     _, mask = dataset[i]
+    #     if mask.sum() == 0:
+    #         background += 1
+    #     else:
+    #         glacier += 1
+    #
+    # print("background:", background)
+    # print("glacier:", glacier)
 
