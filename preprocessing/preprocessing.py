@@ -201,7 +201,7 @@ def main():
 
     terrain_features = compute_terrain_features(dem, transform, crs)
 
-    # ✅ STEP 1: compute global stats BEFORE filtering
+    # STEP 1: compute global stats BEFORE filtering
     mean, std = compute_stats_streaming(img_mosaic, terrain_features)
 
     os.makedirs("../dataset", exist_ok=True)
@@ -211,7 +211,7 @@ def main():
 
     print("Saved mean/std")
 
-    # ✅ STEP 2: extract patches
+    # STEP 2: extract patches
     extract_patches(img_mosaic, mask_mosaic, terrain_features)
 
 
