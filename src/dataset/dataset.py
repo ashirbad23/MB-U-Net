@@ -5,6 +5,8 @@ from pathlib import Path
 import glob
 import json
 
+from utils.transform import GlacierTransform
+
 
 class GlacierDataset(Dataset):
     def __init__(self, path: Path, transform=None, patch_size=512, overlap=1, mode=None, mode_path=None):
@@ -15,6 +17,8 @@ class GlacierDataset(Dataset):
         self.patch_size = patch_size
 
         assert self.path.exists(), "Dataset path doesn't exist"
+        self.mean = np.load(str(self.path / "mean.npy"))
+        self.std = np.load(str(self.path / "std.npy"))
 
         self.samples = []
 
@@ -74,18 +78,20 @@ class GlacierDataset(Dataset):
         mask_patch = torch.from_numpy(mask_patch).long()
 
         if self.transform:
-            img_patch, mask_patch = self.transform(img_patch, mask_patch)
+            img_patch, mask_patch = self.transform(img_patch, mask_patch, self.mean, self.std)
 
         return img_patch, mask_patch
 
 
 if __name__ == "__main__":
+    transform = GlacierTransform()
     dataset = GlacierDataset(path=Path("/Glacier_Image_Segmentation_Research/Glacier-Analogy/dataset"),
                              patch_size=128,
                              overlap=2,
                              mode='train',
                              mode_path=Path("/Glacier_Image_Segmentation_Research/Glacier-Analogy/config"
-                                            "/train_val_split.json"))
+                                            "/train_val_split.json"),
+                             transform=transform)
     img, mask = dataset[1000]
     print(img.shape, mask.shape)
     print(len(dataset))
