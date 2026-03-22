@@ -40,7 +40,7 @@ def load_data(data_dir):
 
 
 # --------------------------------------------------
-# Compute terrain derivatives
+# Compute terrain features (CORRECT)
 # --------------------------------------------------
 
 def compute_terrain_features(dem, transform, crs):
@@ -49,58 +49,65 @@ def compute_terrain_features(dem, transform, crs):
 
     dem_x = xdem.DEM.from_array(dem, transform=transform, crs=crs)
 
-    slope = xdem.terrain.slope(dem_x).data
-    aspect = xdem.terrain.aspect(dem_x).data
+    # --- Base features ---
+    slope = dem_x.slope().data
+    aspect = dem_x.aspect().data
 
     aspect_rad = np.deg2rad(aspect)
     aspect_sin = np.sin(aspect_rad)
     aspect_cos = np.cos(aspect_rad)
 
-    profile_curv = xdem.terrain.profile_curvature(dem_x).data
-    plan_curv = xdem.terrain.planform_curvature(dem_x).data
+    profile_curv = dem_x.profile_curvature().data
+    plan_curv = dem_x.planform_curvature().data
 
-    dx, dy = np.gradient(dem, 10, 10)
+    k_max = dem_x.max_curvature().data
+    k_min = dem_x.min_curvature().data
 
-    dxx, dxy = np.gradient(dx, 10, 10)
-    dyx, dyy = np.gradient(dy, 10, 10)
+    # --- Fix scaling (xDEM uses *100) ---
+    scale = 100.0
+    profile_curv /= scale
+    plan_curv /= scale
+    k_max /= scale
+    k_min /= scale
 
-    mean_curv = (dxx + dyy) / 2
-    gaussian_curv = (dxx * dyy - dxy**2)
-    slope_azimuth_divergence = dxx + dyy
-    unsphericity = np.sqrt(dxx**2 + 2 * (dxy**2) + dyy**2)
+    # --- Derived features ---
+    H = (k_max + k_min) / 2          # Mean curvature
+    K = k_max * k_min               # Gaussian curvature
+    M = (k_max - k_min) / 2         # Unsphericity
+    E = 0.5 * (profile_curv - plan_curv)  # Slope azimuth divergence
 
-    slope = np.ma.filled(slope, 0)
-    profile_curv = np.ma.filled(profile_curv, 0)
-    plan_curv = np.ma.filled(plan_curv, 0)
-    aspect_sin = np.ma.filled(aspect_sin, 0)
-    aspect_cos = np.ma.filled(aspect_cos, 0)
+    # Clean masked values
+    def clean(x):
+        return np.ma.filled(x, 0)
 
     return (
-        slope,
-        aspect_sin,
-        aspect_cos,
-        profile_curv,
-        plan_curv,
-        mean_curv,
-        gaussian_curv,
-        slope_azimuth_divergence,
-        unsphericity
+        clean(slope),
+        clean(aspect_sin),
+        clean(aspect_cos),
+        clean(profile_curv),
+        clean(plan_curv),
+        clean(k_max),
+        clean(k_min),
+        clean(H),
+        clean(K),
+        clean(E),
+        clean(M),
     )
 
 
 # --------------------------------------------------
-# Compute global stats (CORRECT WAY)
+# Compute global stats (RAM SAFE)
 # --------------------------------------------------
 
 def compute_stats_streaming(img_mosaic, terrain_features):
 
-    terrain_stack = np.stack(terrain_features)
+    terrain_features = list(terrain_features)
 
     sum_c = None
     sum_sq_c = None
     count = 0
 
-    chunk_size = 256  # smaller = safer
+    chunk_size = 256
 
     _, H, W = img_mosaic.shape
 
@@ -109,13 +116,14 @@ def compute_stats_streaming(img_mosaic, terrain_features):
         y_end = min(y + chunk_size, H)
 
         img_chunk = img_mosaic[:, y:y_end, :]
-        terrain_chunk = terrain_stack[:, y:y_end, :]
+
+        terrain_chunk = np.stack([
+            t[y:y_end, :] for t in terrain_features
+        ])
 
         full = np.concatenate([img_chunk, terrain_chunk], axis=0)
 
-        # force float32 (important!)
         full = full.astype(np.float32)
-
         full = full.reshape(full.shape[0], -1)
 
         if sum_c is None:
@@ -130,7 +138,6 @@ def compute_stats_streaming(img_mosaic, terrain_features):
     mean = sum_c / count
     std = np.sqrt(sum_sq_c / count - mean**2)
 
-    # avoid division issues
     std = np.where(std < 1e-6, 1e-6, std)
 
     return mean.astype(np.float32), std.astype(np.float32)
@@ -142,18 +149,29 @@ def compute_stats_streaming(img_mosaic, terrain_features):
 
 def extract_patches(img_mosaic, mask_mosaic, terrain_features):
 
-    slope, aspect_sin, aspect_cos, profile_curv, plan_curv, \
-    mean_curv, gaussian_curv, slope_azimuth_divergence, unsphericity = terrain_features
+    (
+        slope,
+        aspect_sin,
+        aspect_cos,
+        profile_curv,
+        plan_curv,
+        k_max,
+        k_min,
+        H,
+        K,
+        E,
+        M
+    ) = terrain_features
 
     os.makedirs("../dataset/images", exist_ok=True)
     os.makedirs("../dataset/masks", exist_ok=True)
 
-    _, H, W = img_mosaic.shape
+    _, H_img, W_img = img_mosaic.shape
 
     counter = 0
 
-    for y in range(0, H - PATCH + 1, STRIDE):
-        for x in range(0, W - PATCH + 1, STRIDE):
+    for y in range(0, H_img - PATCH + 1, STRIDE):
+        for x in range(0, W_img - PATCH + 1, STRIDE):
 
             img_patch = img_mosaic[:, y:y+PATCH, x:x+PATCH]
 
@@ -163,10 +181,12 @@ def extract_patches(img_mosaic, mask_mosaic, terrain_features):
                 aspect_cos[y:y+PATCH, x:x+PATCH],
                 profile_curv[y:y+PATCH, x:x+PATCH],
                 plan_curv[y:y+PATCH, x:x+PATCH],
-                mean_curv[y:y+PATCH, x:x+PATCH],
-                gaussian_curv[y:y+PATCH, x:x+PATCH],
-                slope_azimuth_divergence[y:y+PATCH, x:x+PATCH],
-                unsphericity[y:y+PATCH, x:x+PATCH]
+                k_max[y:y+PATCH, x:x+PATCH],
+                k_min[y:y+PATCH, x:x+PATCH],
+                H[y:y+PATCH, x:x+PATCH],
+                K[y:y+PATCH, x:x+PATCH],
+                E[y:y+PATCH, x:x+PATCH],
+                M[y:y+PATCH, x:x+PATCH],
             ])
 
             full_patch = np.concatenate([img_patch, terrain_patch], axis=0)
@@ -197,11 +217,11 @@ def main():
 
     img_mosaic, mask_mosaic, transform, crs = load_data(data_dir)
 
-    dem = img_mosaic[6]
+    dem = img_mosaic[6]  # DEM band
 
     terrain_features = compute_terrain_features(dem, transform, crs)
 
-    # STEP 1: compute global stats BEFORE filtering
+    # --- Compute normalization stats ---
     mean, std = compute_stats_streaming(img_mosaic, terrain_features)
 
     os.makedirs("../dataset", exist_ok=True)
@@ -211,7 +231,7 @@ def main():
 
     print("Saved mean/std")
 
-    # STEP 2: extract patches
+    # --- Extract patches ---
     extract_patches(img_mosaic, mask_mosaic, terrain_features)
 
 
