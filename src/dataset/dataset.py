@@ -84,13 +84,17 @@ class GlacierDataset(Dataset):
 
 
 if __name__ == "__main__":
+    ROOT = Path(__file__).resolve().parent
+    ROOT = ROOT.parent.parent
+
+    DATASET = ROOT / "dataset"
+    CONFIG = ROOT / "config"
     transform = GlacierTransform()
-    dataset = GlacierDataset(path=Path("/Glacier_Image_Segmentation_Research/Glacier-Analogy/dataset"),
+    dataset = GlacierDataset(path=DATASET,
                              patch_size=128,
                              overlap=2,
                              mode='train',
-                             mode_path=Path("/Glacier_Image_Segmentation_Research/Glacier-Analogy/config"
-                                            "/train_val_split.json"),
+                             mode_path=CONFIG / "train_val_split.json",
                              transform=transform)
     img, mask = dataset[1000]
     print(img.shape, mask.shape)
@@ -98,8 +102,8 @@ if __name__ == "__main__":
     for i in range(img.shape[0]):
         print(i, img[i].min(), img[i].max())
 
-    background = 0
-    glacier = 0
+    # background = 0
+    # glacier = 0
 
     # for i in range(len(dataset)):
     #     _, mask = dataset[i]
