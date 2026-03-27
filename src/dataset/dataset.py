@@ -91,8 +91,8 @@ if __name__ == "__main__":
     CONFIG = ROOT / "config"
     transform = GlacierTransform()
     dataset = GlacierDataset(path=DATASET,
-                             patch_size=128,
-                             overlap=0.5,
+                             patch_size=64,
+                             overlap=0.25,
                              mode='train',
                              mode_path=CONFIG / "train_val_split.json",
                              transform=transform)
@@ -103,16 +103,16 @@ if __name__ == "__main__":
     for i in range(img.shape[0]):
         print(i, img[i].min(), img[i].max())
 
-    background = 0
-    glacier = 0
-
-    for i in range(len(dataset)):
-        _, mask = dataset[i]
-        if mask.sum() == 0:
-            background += 1
-        else:
-            glacier += 1
-
-    print("background:", background)
-    print("glacier:", glacier)
+    # background = 0
+    # glacier = 0
+    #
+    # for i in range(len(dataset)):
+    #     _, mask = dataset[i]
+    #     if mask.sum() == 0:
+    #         background += 1
+    #     else:
+    #         glacier += 1
+    #
+    # print("background:", background)
+    # print("glacier:", glacier)
 
