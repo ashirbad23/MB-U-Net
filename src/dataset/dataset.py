@@ -9,7 +9,7 @@ from utils.transform import GlacierTransform
 
 
 class GlacierDataset(Dataset):
-    def __init__(self, path: Path, transform=None, patch_size=512, overlap=1, mode=None, mode_path=None):
+    def __init__(self, path: Path, transform=None, patch_size=512, overlap=1.0, mode=None, mode_path=None):
         super().__init__()
 
         self.path = Path(path)
@@ -21,14 +21,13 @@ class GlacierDataset(Dataset):
         self.std = np.load(str(self.path / "std.npy"))
 
         self.samples = []
+        self.image_path = self.path / "images"
+        self.masks_path = self.path / "masks"
+
+        assert self.image_path.exists(), "Images folder missing"
+        assert self.masks_path.exists(), "Masks folder missing"
 
         if mode is None:
-            self.image_path = self.path / "images"
-            self.masks_path = self.path / "masks"
-
-            assert self.image_path.exists(), "Images folder missing"
-            assert self.masks_path.exists(), "Masks folder missing"
-
             self.band_files = sorted(glob.glob(str(self.image_path / "*.npy")))
             self.mask_files = sorted(glob.glob(str(self.masks_path / "*.npy")))
         else:
@@ -39,13 +38,14 @@ class GlacierDataset(Dataset):
                 split = json.load(f)
 
             if mode.lower() == 'train':
-                self.band_files = [Path(p) for p in split['train_bands']]
-                self.mask_files = [Path(p) for p in split['train_masks']]
+                ids = split['train']
             elif mode.lower() == 'val':
-                self.band_files = [Path(p) for p in split['val_bands']]
-                self.mask_files = [Path(p) for p in split['val_masks']]
+                ids = split['val']
             else:
                 raise ValueError("Mode can only be None, train, val")
+
+            self.band_files = sorted([self.image_path / f"img_{i}.npy" for i in ids])
+            self.mask_files = sorted([self.masks_path / f"mask_{i}.npy" for i in ids])
 
         assert len(self.band_files) == len(self.mask_files)
 
@@ -55,7 +55,7 @@ class GlacierDataset(Dataset):
         img = np.load(self.band_files[0])
         _, H, W = img.shape
 
-        stride = patch_size // overlap
+        stride = int(patch_size * overlap)
 
         for img_path, mask_path in zip(self.band_files, self.mask_files):
             for y in range(0, H - patch_size + 1, stride):
@@ -92,26 +92,27 @@ if __name__ == "__main__":
     transform = GlacierTransform()
     dataset = GlacierDataset(path=DATASET,
                              patch_size=128,
-                             overlap=2,
+                             overlap=0.5,
                              mode='train',
                              mode_path=CONFIG / "train_val_split.json",
                              transform=transform)
-    img, mask = dataset[1000]
+    # img, mask = dataset[1000]
+    img, mask = dataset[0]
     print(img.shape, mask.shape)
     print(len(dataset))
     for i in range(img.shape[0]):
         print(i, img[i].min(), img[i].max())
 
-    # background = 0
-    # glacier = 0
+    background = 0
+    glacier = 0
 
-    # for i in range(len(dataset)):
-    #     _, mask = dataset[i]
-    #     if mask.sum() == 0:
-    #         background += 1
-    #     else:
-    #         glacier += 1
-    #
-    # print("background:", background)
-    # print("glacier:", glacier)
+    for i in range(len(dataset)):
+        _, mask = dataset[i]
+        if mask.sum() == 0:
+            background += 1
+        else:
+            glacier += 1
+
+    print("background:", background)
+    print("glacier:", glacier)
 
