@@ -9,12 +9,13 @@ from utils.transform import GlacierTransform
 
 
 class GlacierDataset(Dataset):
-    def __init__(self, path: Path, transform=None, patch_size=512, overlap=1.0, mode=None, mode_path=None):
+    def __init__(self, path: Path, transform=None, patch_size=512, overlap=1.0, mode=None, mode_path=None, bands_used=None):
         super().__init__()
 
         self.path = Path(path)
         self.transform = transform
         self.patch_size = patch_size
+        self.bands_used = bands_used
 
         assert self.path.exists(), "Dataset path doesn't exist"
         self.mean = np.load(str(self.path / "mean.npy"))
@@ -80,6 +81,8 @@ class GlacierDataset(Dataset):
         if self.transform:
             img_patch, mask_patch = self.transform(img_patch, mask_patch, self.mean, self.std)
 
+        img_patch = img_patch[self.bands_used] if self.bands_used is not None else img_patch
+
         return img_patch, mask_patch
 
 
@@ -92,10 +95,11 @@ if __name__ == "__main__":
     transform = GlacierTransform()
     dataset = GlacierDataset(path=DATASET,
                              patch_size=64,
-                             overlap=0.25,
+                             overlap=0.5,
                              mode='train',
                              mode_path=CONFIG / "train_val_split.json",
-                             transform=transform)
+                             transform=transform,
+                             bands_used=[0, 1, 2, 3, 4, 5])
     # img, mask = dataset[1000]
     img, mask = dataset[0]
     print(img.shape, mask.shape)
