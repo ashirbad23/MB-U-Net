@@ -13,7 +13,7 @@
 
 # ===============================
 
-checkpoints/
+model_checkpoints/
 models/
 weights/
 *.pth
