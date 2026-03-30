@@ -143,11 +143,13 @@ class SUnet(nn.Module):
             self.se = IdentitySE()
 
     def forward(self, x):
-        sat = x[:, :6, :, :]
-        geo = x[:, 6:, :, :]
+        geo_weights = None
+        if x.shape[1] > 6:
+            sat = x[:, :6, :, :]
+            geo = x[:, 6:, :, :]
 
-        geo, geo_weights = self.se(geo)
-        x = torch.cat([sat, geo], dim=1)
+            geo, geo_weights = self.se(geo)
+            x = torch.cat([sat, geo], dim=1)
 
         h = self.head(x)
 
@@ -180,7 +182,7 @@ class SUnet(nn.Module):
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # 🔧 Adjust these based on your dataset
-    in_channels = 18  # e.g. satellite + terrain channels
+    in_channels = 6  # e.g. satellite + terrain channels
     out_channels = 1  # segmentation mask
     ch_head = 128
     num_res_blocks = 2
