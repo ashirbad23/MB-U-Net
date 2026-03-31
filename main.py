@@ -10,13 +10,14 @@ CONFIG = ROOT / "config"
 CHECKPOINTS = ROOT / "model_checkpoints"
 
 model_config = {
+    "mode": "train",
     # ================= PATHS =================
     "dataset": str(ROOT / "dataset"),
     "split_path": str(ROOT / "config" / "train_val_split.json"),
-    "run_base_dir": str(ROOT / "model_checkpoints"),
+    "run_base_dir": str(ROOT / "runs"),
 
     # ================= RESUME =================
-    "resume": False,
+    "resume": True,
     "resume_path": None,
 
     # ================= DEVICE =================
