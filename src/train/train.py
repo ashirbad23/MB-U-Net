@@ -1,12 +1,14 @@
 import os
-from pathlib import Path
+import json
 import csv
 import logging
+from pathlib import Path
 
 import torch
 import torch.optim as optim
 from tqdm import tqdm
 from torch.utils.data import DataLoader
+from torch.cuda.amp import autocast, GradScaler
 
 from src.dataset.dataset import GlacierDataset
 from utils.transform import GlacierTransform
@@ -18,10 +20,40 @@ from utils.save_model import save_model
 from src.model.model import SUnet
 
 
+# ================= EXPERIMENT MANAGEMENT =================
+
+def create_experiment_dir(base_dir):
+    os.makedirs(base_dir, exist_ok=True)
+
+    existing = [d for d in os.listdir(base_dir) if d.startswith("exp_")]
+    ids = [int(d.split("_")[1]) for d in existing if d.split("_")[1].isdigit()]
+
+    next_id = max(ids) + 1 if ids else 1
+    exp_name = f"exp_{next_id:03d}"
+
+    exp_path = os.path.join(base_dir, exp_name)
+    os.makedirs(exp_path, exist_ok=True)
+
+    return exp_path
+
+
+def get_latest_experiment(base_dir):
+    if not os.path.exists(base_dir):
+        return None
+
+    exps = [d for d in os.listdir(base_dir) if d.startswith("exp_")]
+    if not exps:
+        return None
+
+    exps = sorted(exps)
+    return os.path.join(base_dir, exps[-1])
+
+
 # ================= LOGGER =================
-def get_logger(log_path):
-    log_path = Path(log_path)
-    log_path.mkdir(parents=True, exist_ok=True)
+
+def get_logger(log_dir):
+    log_dir = Path(log_dir)
+    log_dir.mkdir(parents=True, exist_ok=True)
 
     logger = logging.getLogger("train_logger")
     logger.setLevel(logging.INFO)
@@ -29,13 +61,13 @@ def get_logger(log_path):
     if logger.hasHandlers():
         logger.handlers.clear()
 
-    file_handler = logging.FileHandler(log_path / "train.log")
-    console_handler = logging.StreamHandler()
-
     formatter = logging.Formatter(
         "%(asctime)s - %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S"
     )
+
+    file_handler = logging.FileHandler(log_dir / "train.log")
+    console_handler = logging.StreamHandler()
 
     file_handler.setFormatter(formatter)
     console_handler.setFormatter(formatter)
@@ -46,11 +78,12 @@ def get_logger(log_path):
     return logger
 
 
-# ================= CSV LOGGER =================
-def init_csv(log_path):
-    csv_path = Path(log_path) / "metrics.csv"
+# ================= CSV =================
 
-    with open(csv_path, mode="w", newline="") as f:
+def init_csv(log_dir):
+    csv_path = Path(log_dir) / "metrics.csv"
+
+    with open(csv_path, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow([
             "epoch", "train_loss", "val_loss",
@@ -61,7 +94,7 @@ def init_csv(log_path):
 
 
 def log_csv(csv_path, epoch, train_loss, val_loss, metrics):
-    with open(csv_path, mode="a", newline="") as f:
+    with open(csv_path, "a", newline="") as f:
         writer = csv.writer(f)
         writer.writerow([
             epoch,
@@ -75,17 +108,25 @@ def log_csv(csv_path, epoch, train_loss, val_loss, metrics):
         ])
 
 
+# ================= CHECKPOINT =================
+
+def load_checkpoint(path, model, optimizer, scheduler, device):
+    if not os.path.exists(path):
+        return 0, -1
+
+    checkpoint = torch.load(path, map_location=device)
+
+    model.load_state_dict(checkpoint["model"])
+    optimizer.load_state_dict(checkpoint["optimizer"])
+    scheduler.load_state_dict(checkpoint["scheduler"])
+
+    return checkpoint["epoch"] + 1, checkpoint.get("best_metric", -1)
+
+
 # ================= VALIDATION =================
+
 @torch.no_grad()
-def validate(model, config, device):
-    dataset = GlacierDataset(
-        path=Path(config['dataset']),
-        patch_size=config["patch_size"],
-        overlap=config["overlap_val"],
-        mode='val',
-        mode_path=Path(config['split_path']),
-        bands_used=config["bands_used"]
-    )
+def validate(model, config, device, dataset):
 
     loader = DataLoader(
         dataset,
@@ -98,24 +139,18 @@ def validate(model, config, device):
     loss_fn = FocalDiceLoss()
 
     total_loss = 0
-    total_metrics = {
-        "IoU": 0,
-        "Precision": 0,
-        "Recall": 0,
-        "F1": 0,
-        "MCC": 0
-    }
+    total_metrics = {k: 0 for k in ["IoU", "Precision", "Recall", "F1", "MCC"]}
     count = 0
 
     for bands, masks in tqdm(loader, desc="Validation", dynamic_ncols=True):
         bands = bands.to(device)
         masks = masks.to(device)
 
-        preds, _ = model(bands)
+        with autocast(enabled=(device.type == "cuda")):
+            preds, _ = model(bands)
+            loss = loss_fn(preds, masks)
 
-        loss = loss_fn(preds, masks)
         total_loss += loss.item()
-
         metrics = compute_metrics(preds, masks)
 
         for k in total_metrics:
@@ -130,25 +165,46 @@ def validate(model, config, device):
 
 
 # ================= TRAIN =================
+
 def train(config: dict):
+
     device = torch.device(config['device'])
+    scaler = GradScaler(enabled=(device.type == "cuda"))
 
-    logger = get_logger(config["checkpoint"])
-    csv_path = init_csv(config["checkpoint"])
+    # ===== EXP DIR =====
+    if config.get("resume", False):
+        exp_dir = config.get("resume_path") or get_latest_experiment(config["run_base_dir"])
+        if exp_dir is None:
+            raise ValueError("No experiment found to resume")
+    else:
+        exp_dir = create_experiment_dir(config["run_base_dir"])
 
-    # ---- log config ----
-    logger.info("==== CONFIG ====")
-    for k, v in config.items():
-        logger.info(f"{k}: {v}")
-    logger.info("================")
+    # ===== LOGGER =====
+    logger = get_logger(exp_dir)
+    csv_path = init_csv(exp_dir)
 
-    # ---- TRAIN DATA ----
+    logger.info(f"Experiment dir: {exp_dir}")
+
+    # ===== SAVE CONFIG =====
+    with open(os.path.join(exp_dir, "config.json"), "w") as f:
+        json.dump(config, f, indent=4)
+
+    # ===== DATA =====
     train_dataset = GlacierDataset(
         path=Path(config['dataset']),
         patch_size=config["patch_size"],
         overlap=config["overlap_train"],
         transform=GlacierTransform(),
         mode='train',
+        mode_path=Path(config['split_path']),
+        bands_used=config["bands_used"]
+    )
+
+    val_dataset = GlacierDataset(
+        path=Path(config['dataset']),
+        patch_size=config["patch_size"],
+        overlap=config["overlap_val"],
+        mode='val',
         mode_path=Path(config['split_path']),
         bands_used=config["bands_used"]
     )
@@ -160,7 +216,7 @@ def train(config: dict):
         pin_memory=True
     )
 
-    # ---- MODEL ----
+    # ===== MODEL =====
     model = SUnet(
         ch_head=config["channel_head"],
         in_ch=config["in_channels"],
@@ -171,17 +227,17 @@ def train(config: dict):
         dropout=config["dropout"]
     ).to(device)
 
-    # ---- LOSS ----
+    # ===== LOSS =====
     loss_fn = FocalDiceLoss()
 
-    # ---- OPTIMIZER ----
+    # ===== OPTIMIZER =====
     optimizer = optim.AdamW(
         model.parameters(),
         lr=config["learning_rate"],
         weight_decay=1e-4
     )
 
-    # ---- SCHEDULER ----
+    # ===== SCHEDULER =====
     cosine = optim.lr_scheduler.CosineAnnealingLR(
         optimizer=optimizer,
         T_max=config["epochs"]
@@ -194,15 +250,21 @@ def train(config: dict):
         after_scheduler=cosine
     )
 
-    best_mcc = -1
+    # ===== RESUME =====
+    latest_path = os.path.join(exp_dir, "latest.pth")
+    start_epoch, best_mcc = load_checkpoint(
+        latest_path, model, optimizer, scheduler, device
+    )
+
+    logger.info(f"Start epoch: {start_epoch}, Best MCC: {best_mcc:.4f}")
 
     # ================= TRAIN LOOP =================
-    for epoch in range(config["epochs"]):
+    for epoch in range(start_epoch, config["epochs"]):
 
         model.train()
-        pbar = tqdm(train_loader, dynamic_ncols=True)
-
         total_train_loss = 0
+
+        pbar = tqdm(train_loader, dynamic_ncols=True)
 
         for bands, masks in pbar:
             bands = bands.to(device)
@@ -210,25 +272,33 @@ def train(config: dict):
 
             optimizer.zero_grad()
 
-            preds, _ = model(bands)
+            with autocast(enabled=(device.type == "cuda")):
+                preds, _ = model(bands)
+                loss = loss_fn(preds, masks)
 
-            loss = loss_fn(preds, masks)
-            total_train_loss += loss.item()
+            if not torch.isfinite(loss):
+                logger.warning("Skipping non-finite loss")
+                continue
 
-            loss.backward()
+            scaler.scale(loss).backward()
+
+            scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            optimizer.step()
 
-            pbar.set_postfix({"epoch": epoch, "loss": loss.item()})
+            scaler.step(optimizer)
+            scaler.update()
+
+            total_train_loss += loss.item()
+            pbar.set_postfix({"loss": f"{loss.item():.4f}"})
 
         scheduler.step()
 
         avg_train_loss = total_train_loss / len(train_loader)
 
-        # ---- VALIDATION ----
-        val_loss, val_metrics = validate(model, config, device)
+        # ===== VALIDATION =====
+        val_loss, val_metrics = validate(model, config, device, val_dataset)
 
-        # ---- LOGGING ----
+        # ===== LOGGING =====
         logger.info(f"Epoch {epoch}")
         logger.info(f"Train Loss: {avg_train_loss:.4f}")
         logger.info(f"Val Loss: {val_loss:.4f}")
@@ -240,20 +310,35 @@ def train(config: dict):
             f"MCC: {val_metrics['MCC']:.4f}"
         )
 
-        # ---- CSV LOG ----
         log_csv(csv_path, epoch, avg_train_loss, val_loss, val_metrics)
 
-        # ---- SAVE BEST ----
+        # ===== SAVE LATEST =====
+        save_model(
+            exp_dir,
+            model,
+            optimizer,
+            scheduler,
+            epoch,
+            tag="latest",
+            best_metric=best_mcc,
+            loss=avg_train_loss
+        )
+
+        # ===== SAVE BEST =====
         if val_metrics["MCC"] > best_mcc:
             best_mcc = val_metrics["MCC"]
 
-            logger.info(f"New best MCC: {best_mcc:.4f} — saving model")
+            logger.info(f"New best MCC: {best_mcc:.4f}")
 
             save_model(
-                config["checkpoint"],
+                exp_dir,
                 model,
                 optimizer,
                 scheduler,
                 epoch,
-                best_mcc
+                tag="best",
+                best_metric=best_mcc,
+                loss=avg_train_loss
             )
+
+    logger.info("Training complete")
