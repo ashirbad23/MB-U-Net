@@ -10,11 +10,14 @@ CONFIG = ROOT / "config"
 CHECKPOINTS = ROOT / "model_checkpoints"
 
 model_config = {
-    "mode": "train",
     # ================= PATHS =================
     "dataset": str(ROOT / "dataset"),
     "split_path": str(ROOT / "config" / "train_val_split.json"),
-    "checkpoint": str(ROOT / "model_checkpoints" / "exp_v1"),
+    "run_base_dir": str(ROOT / "model_checkpoints"),
+
+    # ================= RESUME =================
+    "resume": False,
+    "resume_path": None,
 
     # ================= DEVICE =================
     "device": "cuda" if torch.cuda.is_available() else "cpu",
