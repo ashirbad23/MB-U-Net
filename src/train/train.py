@@ -19,6 +19,16 @@ from utils.save_model import save_model
 
 from src.model.model import SUnet
 
+import random
+import numpy as np
+
+
+def set_seed(seed=42):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
 
 # ================= EXPERIMENT MANAGEMENT =================
 
@@ -128,7 +138,6 @@ def load_checkpoint(path, model, optimizer, scheduler, scaler, device):
 
 @torch.no_grad()
 def validate(model, config, device, dataset):
-
     loader = DataLoader(
         dataset,
         batch_size=config['batch_size'],
@@ -168,7 +177,7 @@ def validate(model, config, device, dataset):
 # ================= TRAIN =================
 
 def train(config: dict):
-
+    set_seed(config["seed"])
     device = torch.device(config['device'])
     scaler = GradScaler(enabled=(device.type == "cuda"))
 

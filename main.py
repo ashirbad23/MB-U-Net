@@ -11,6 +11,7 @@ CHECKPOINTS = ROOT / "model_checkpoints"
 
 model_config = {
     "mode": "train",
+    "seed": 42,
     # ================= PATHS =================
     "dataset": str(ROOT / "dataset"),
     "split_path": str(ROOT / "config" / "train_val_split.json"),
