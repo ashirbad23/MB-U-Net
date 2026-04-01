@@ -110,7 +110,7 @@ def log_csv(csv_path, epoch, train_loss, val_loss, metrics):
 
 # ================= CHECKPOINT =================
 
-def load_checkpoint(path, model, optimizer, scheduler, device):
+def load_checkpoint(path, model, optimizer, scheduler, scaler, device):
     if not os.path.exists(path):
         return 0, -1
 
@@ -119,6 +119,7 @@ def load_checkpoint(path, model, optimizer, scheduler, device):
     model.load_state_dict(checkpoint["model"])
     optimizer.load_state_dict(checkpoint["optimizer"])
     scheduler.load_state_dict(checkpoint["scheduler"])
+    scaler.load_state_dict(checkpoint["scaler"])
 
     return checkpoint["epoch"] + 1, checkpoint.get("best_metric", -1)
 
@@ -318,6 +319,7 @@ def train(config: dict):
             model,
             optimizer,
             scheduler,
+            scaler,
             epoch,
             tag="latest",
             best_metric=best_mcc,
@@ -335,6 +337,7 @@ def train(config: dict):
                 model,
                 optimizer,
                 scheduler,
+                scaler,
                 epoch,
                 tag="best",
                 best_metric=best_mcc,

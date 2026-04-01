@@ -2,7 +2,7 @@ from pathlib import Path
 import torch
 
 
-def save_model(model_path, model, optimizer, scheduler, current_epoch, tag, best_metric=None, loss=None):
+def save_model(model_path, model, optimizer, scheduler, scaler, current_epoch, tag, best_metric=None, loss=None):
     model_path = Path(model_path)
     model_path.mkdir(parents=True, exist_ok=True)
 
@@ -19,6 +19,7 @@ def save_model(model_path, model, optimizer, scheduler, current_epoch, tag, best
         "model": model.state_dict(),
         "optimizer": optimizer.state_dict(),
         "scheduler": scheduler.state_dict(),
+        "scaler": scaler.state_dict(),
         "epoch": current_epoch,
         "loss": loss
     }
