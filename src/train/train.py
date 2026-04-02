@@ -15,8 +15,9 @@ from utils.loss import FocalDiceLoss
 from utils.metrics import compute_metrics
 from utils.scheduler import GradualWarmupScheduler
 from utils.save_model import save_model
+from utils.sampler import GlacierBalancedSampler
 
-from src.model.model import SUnet
+from src.model.model import SUnetSimple
 
 import random
 import numpy as np
@@ -215,15 +216,21 @@ def train(config: dict):
         bands_used=config["bands_used"]
     )
 
+    sampler = GlacierBalancedSampler(
+        dataset=train_dataset,
+        batch_size=config['batch_size']
+    )
+
     train_loader = DataLoader(
         train_dataset,
-        batch_size=config['batch_size'],
+        batch_sampler=sampler,
+        # batch_size=config['batch_size'],
         num_workers=config['num_workers'],
-        pin_memory=True
+        pin_memory=True,
     )
 
     # ===== MODEL =====
-    model = SUnet(
+    model = SUnetSimple(
         ch_head=config["channel_head"],
         in_ch=config["in_channels"],
         out_ch=config["out_channels"],
