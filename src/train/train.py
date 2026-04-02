@@ -224,7 +224,6 @@ def train(config: dict):
     train_loader = DataLoader(
         train_dataset,
         batch_sampler=sampler,
-        # batch_size=config['batch_size'],
         num_workers=config['num_workers'],
         pin_memory=True,
     )
@@ -279,29 +278,39 @@ def train(config: dict):
 
         pbar = tqdm(train_loader, dynamic_ncols=True)
 
-        for bands, masks in pbar:
+        accum_steps = config.get("accum_steps", 1)
+        optimizer.zero_grad()
+
+        for i, (bands, masks) in enumerate(pbar):
+
             bands = bands.to(device)
             masks = masks.to(device)
 
-            optimizer.zero_grad()
-
             preds, _ = model(bands)
-            loss = loss_fn(preds, masks)
+            raw_loss = loss_fn(preds, masks)
 
-            if not torch.isfinite(loss):
+            if not torch.isfinite(raw_loss):
                 logger.warning("Skipping non-finite loss")
+                optimizer.zero_grad()
                 continue
 
+            loss = raw_loss / accum_steps
             loss.backward()
 
-            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            if (i + 1) % accum_steps == 0:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+                optimizer.step()
+                optimizer.zero_grad()
 
-            optimizer.step()
-
-            total_train_loss += loss.item()
-            pbar.set_postfix({"loss": f"{loss.item():.4f}"})
+            total_train_loss += raw_loss.item()
+            pbar.set_postfix({"loss": f"{raw_loss.item():.4f}"})
 
         scheduler.step()
+
+        if len(train_loader) % accum_steps != 0:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
+            optimizer.step()
+            optimizer.zero_grad()
 
         avg_train_loss = total_train_loss / len(train_loader)
 
