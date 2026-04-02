@@ -8,7 +8,6 @@ import torch
 import torch.optim as optim
 from tqdm import tqdm
 from torch.utils.data import DataLoader
-from torch.cuda.amp import autocast, GradScaler
 
 from src.dataset.dataset import GlacierDataset
 from utils.transform import GlacierTransform
@@ -120,7 +119,7 @@ def log_csv(csv_path, epoch, train_loss, val_loss, metrics):
 
 # ================= CHECKPOINT =================
 
-def load_checkpoint(path, model, optimizer, scheduler, scaler, device):
+def load_checkpoint(path, model, optimizer, scheduler, device):
     if not os.path.exists(path):
         return 0, -1
 
@@ -129,7 +128,6 @@ def load_checkpoint(path, model, optimizer, scheduler, scaler, device):
     model.load_state_dict(checkpoint["model"])
     optimizer.load_state_dict(checkpoint["optimizer"])
     scheduler.load_state_dict(checkpoint["scheduler"])
-    scaler.load_state_dict(checkpoint["scaler"])
 
     return checkpoint["epoch"] + 1, checkpoint.get("best_metric", -1)
 
@@ -156,9 +154,8 @@ def validate(model, config, device, dataset):
         bands = bands.to(device)
         masks = masks.to(device)
 
-        with autocast(enabled=(device.type == "cuda")):
-            preds, _ = model(bands)
-            loss = loss_fn(preds, masks)
+        preds, _ = model(bands)
+        loss = loss_fn(preds, masks)
 
         total_loss += loss.item()
         metrics = compute_metrics(preds, masks)
@@ -179,7 +176,6 @@ def validate(model, config, device, dataset):
 def train(config: dict):
     set_seed(config["seed"])
     device = torch.device(config['device'])
-    scaler = GradScaler(enabled=(device.type == "cuda"))
 
     # ===== EXP DIR =====
     if config.get("resume", False):
@@ -263,7 +259,7 @@ def train(config: dict):
     # ===== RESUME =====
     latest_path = os.path.join(exp_dir, "latest.pth")
     start_epoch, best_mcc = load_checkpoint(
-        latest_path, model, optimizer, scheduler, scaler, device
+        latest_path, model, optimizer, scheduler, device
     )
 
     logger.info(f"Start epoch: {start_epoch}, Best MCC: {best_mcc:.4f}")
@@ -282,21 +278,18 @@ def train(config: dict):
 
             optimizer.zero_grad()
 
-            with autocast(enabled=(device.type == "cuda")):
-                preds, _ = model(bands)
+            preds, _ = model(bands)
             loss = loss_fn(preds, masks)
 
             if not torch.isfinite(loss):
                 logger.warning("Skipping non-finite loss")
                 continue
 
-            scaler.scale(loss).backward()
+            loss.backward()
 
-            scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
 
-            scaler.step(optimizer)
-            scaler.update()
+            optimizer.step()
 
             total_train_loss += loss.item()
             pbar.set_postfix({"loss": f"{loss.item():.4f}"})
