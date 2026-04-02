@@ -101,22 +101,23 @@ if __name__ == "__main__":
                              transform=transform,
                              bands_used=[0, 1, 2, 3, 4, 5])
     # img, mask = dataset[1000]
-    img, mask = dataset[0]
+    img, mask = dataset[1000]
+    print(torch.unique(mask))
     print(img.shape, mask.shape)
     print(len(dataset))
     for i in range(img.shape[0]):
         print(i, img[i].min(), img[i].max())
 
-    # background = 0
-    # glacier = 0
-    #
-    # for i in range(len(dataset)):
-    #     _, mask = dataset[i]
-    #     if mask.sum() == 0:
-    #         background += 1
-    #     else:
-    #         glacier += 1
-    #
-    # print("background:", background)
-    # print("glacier:", glacier)
+    background = 0
+    glacier = 0
+
+    for i in range(len(dataset)):
+        _, mask = dataset[i]
+        if mask.sum() == 0:
+            background += 1
+        else:
+            glacier += 1
+
+    print("background:", background)
+    print("glacier:", glacier)
 
