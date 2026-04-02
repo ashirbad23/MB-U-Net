@@ -30,10 +30,10 @@ model_config = {
     "overlap_val": 1,
 
     # ================= BANDS =================
-    "bands_used": None,
+    "bands_used": list(range(6)),
 
     # ================= MODEL =================
-    "in_channels": 18,
+    "in_channels": 6,
     "out_channels": 1,
     "channel_head": 32,
     "num_res_blocks": 2,
@@ -42,8 +42,8 @@ model_config = {
     "use_se": True,
 
     # ================= TRAINING =================
-    "batch_size": 16,
-    "num_workers": 2,
+    "batch_size": 8,
+    "num_workers": 8,
     "epochs": 10,
 
     # ================= OPTIMIZATION =================
@@ -51,7 +51,8 @@ model_config = {
     "warmup_multiplier": 2.5,
 
     # ================= LOSS =================
-    "num_classes": 2
+    "num_classes": 2,
+    "accum_steps": 2
 }
 
 if __name__ == "__main__":
