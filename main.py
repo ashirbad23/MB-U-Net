@@ -30,16 +30,16 @@ model_config = {
     "overlap_val": 1,
 
     # ================= BANDS =================
-    "bands_used": None,
+    "bands_used": list(range(6)),
 
     # ================= MODEL =================
-    "in_channels": 18,
+    "in_channels": 6,
     "out_channels": 1,
     "channel_head": 128,
     "num_res_blocks": 2,
     "dropout": 0.1,
     "use_attention": False,
-    "use_se": True,
+    "use_se": False,
 
     # ================= TRAINING =================
     "batch_size": 4,

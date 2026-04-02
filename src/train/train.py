@@ -284,7 +284,7 @@ def train(config: dict):
 
             with autocast(enabled=(device.type == "cuda")):
                 preds, _ = model(bands)
-                loss = loss_fn(preds, masks)
+            loss = loss_fn(preds, masks)
 
             if not torch.isfinite(loss):
                 logger.warning("Skipping non-finite loss")
