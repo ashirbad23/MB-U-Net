@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 class FocalDiceLoss(nn.Module):
-    def __init__(self, gamma=2.0, alpha=0.25, dice_weight=0.5, smooth=1e-5):
+    def __init__(self, gamma=2.0, alpha=0.25, dice_weight=0.8, smooth=1e-5):
         super().__init__()
         self.gamma = gamma
         self.alpha = alpha
@@ -12,29 +12,30 @@ class FocalDiceLoss(nn.Module):
         self.smooth = smooth
 
     def forward(self, preds, targets):
-        # preds: [B, 1, H, W]
-        # targets: [B, 1, H, W]
-
         preds = preds.float()
         targets = targets.float()
 
-        # ---- BCE with logits ----
+        # BCE
         bce = F.binary_cross_entropy_with_logits(preds, targets, reduction='none')
 
-        # ---- Focal weight ----
         probs = torch.sigmoid(preds)
         pt = torch.where(targets == 1, probs, 1 - probs)
 
         focal = self.alpha * (1 - pt) ** self.gamma * bce
         focal_loss = focal.mean()
 
-        # ---- Dice ----
-        preds = torch.sigmoid(preds)
+        # Dice per sample
+        preds_sig = torch.sigmoid(preds)
 
-        intersection = (preds * targets).sum(dim=(1, 2, 3))
-        union = preds.sum(dim=(1, 2, 3)) + targets.sum(dim=(1, 2, 3))
+        intersection = (preds_sig * targets).sum(dim=(1, 2, 3))
+        union = preds_sig.sum(dim=(1, 2, 3)) + targets.sum(dim=(1, 2, 3))
 
-        dice_loss = 1 - ((2 * intersection + self.smooth) / (union + self.smooth)).mean()
+        dice = (2 * intersection + self.smooth) / (union + self.smooth)
+        dice_loss = 1 - dice
 
-        # ---- Final ----
-        return (1 - self.dice_weight) * focal_loss + self.dice_weight * dice_loss
+        # 🔥 apply dice ONLY where foreground exists
+        has_fg = (targets.sum(dim=(1, 2, 3)) > 0).float()
+
+        dice_loss = (dice_loss * has_fg).mean()
+
+        return focal_loss + self.dice_weight * dice_loss
