@@ -138,7 +138,7 @@ class SUnet(nn.Module):
         )
 
         if se:
-            self.se = SEBlock(12)
+            self.se = SEBlock(in_ch-6)
         else:
             self.se = IdentitySE()
 
