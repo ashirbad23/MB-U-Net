@@ -39,7 +39,7 @@ model_config = {
     "num_res_blocks": 2,
     "dropout": 0.1,
     "use_attention": False,
-    "use_se": True,
+    "use_se": False,
 
     # ================= TRAINING =================
     "batch_size": 8,

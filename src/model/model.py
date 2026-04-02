@@ -219,7 +219,7 @@ class SUnetSimple(nn.Module):
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     # 🔧 Adjust these based on your dataset
-    in_channels = 6  # e.g. satellite + terrain channels
+    in_channels = 18  # e.g. satellite + terrain channels
     out_channels = 1  # segmentation mask
     ch_head = 32
     num_res_blocks = 2
@@ -238,7 +238,7 @@ if __name__ == "__main__":
     # 🧪 Dummy input size (CHANGE if needed)
     H, W = 64, 64
 
-    summary(model, (8, 6, H, W), device=device)
+    summary(model, (8, 18, H, W), device=device)
 
     for name, module in model.named_modules():
         if "AttnBlock" in str(type(module)):
