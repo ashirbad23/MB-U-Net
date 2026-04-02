@@ -263,7 +263,7 @@ def train(config: dict):
     # ===== RESUME =====
     latest_path = os.path.join(exp_dir, "latest.pth")
     start_epoch, best_mcc = load_checkpoint(
-        latest_path, model, optimizer, scheduler, device
+        latest_path, model, optimizer, scheduler, scaler, device
     )
 
     logger.info(f"Start epoch: {start_epoch}, Best MCC: {best_mcc:.4f}")

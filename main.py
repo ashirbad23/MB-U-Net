@@ -18,7 +18,7 @@ model_config = {
     "run_base_dir": str(ROOT / "runs"),
 
     # ================= RESUME =================
-    "resume": True,
+    "resume": False,
     "resume_path": None,
 
     # ================= DEVICE =================
