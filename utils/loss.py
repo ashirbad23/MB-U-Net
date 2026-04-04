@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 class FocalDiceLoss(nn.Module):
-    def __init__(self, gamma=2.0, alpha=0.25, dice_weight=0.8, smooth=1e-5):
+    def __init__(self, gamma=2.0, alpha=0.25, dice_weight=0.5, smooth=1e-5):
         super().__init__()
         self.gamma = gamma
         self.alpha = alpha
