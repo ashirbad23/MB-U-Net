@@ -258,7 +258,7 @@ def train(config: dict):
     scheduler = GradualWarmupScheduler(
         optimizer=optimizer,
         multiplier=config["warmup_multiplier"],
-        warm_epoch=config["epochs"] // 5,
+        warm_epoch=config["warm_epochs"],
         after_scheduler=cosine
     )
 
