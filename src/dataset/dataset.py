@@ -76,7 +76,7 @@ class GlacierDataset(Dataset):
         mask_patch = mask[:, y:y + self.patch_size, x:x + self.patch_size]
 
         img_patch = torch.from_numpy(img_patch).float()
-        mask_patch = torch.from_numpy(mask_patch).long()
+        mask_patch = torch.from_numpy(mask_patch).float()
 
         if self.transform:
             img_patch, mask_patch = self.transform(img_patch, mask_patch, self.mean, self.std)
