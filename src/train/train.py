@@ -8,6 +8,7 @@ import torch
 import torch.optim as optim
 from tqdm import tqdm
 from torch.utils.data import DataLoader
+from torch.cuda.amp import autocast, GradScaler
 
 from src.dataset.dataset import GlacierDataset
 from utils.transform import GlacierTransform
@@ -103,7 +104,7 @@ def init_csv(log_dir):
     return csv_path
 
 
-def log_csv(csv_path, epoch, train_loss, val_loss, metrics):
+def log_csv(csv_path, epoch, train_loss, val_loss, metrics, lr):
     with open(csv_path, "a", newline="") as f:
         writer = csv.writer(f)
         writer.writerow([
@@ -114,13 +115,14 @@ def log_csv(csv_path, epoch, train_loss, val_loss, metrics):
             metrics["Precision"],
             metrics["Recall"],
             metrics["F1"],
-            metrics["MCC"]
+            metrics["MCC"],
+            lr
         ])
 
 
 # ================= CHECKPOINT =================
 
-def load_checkpoint(path, model, optimizer, scheduler, device):
+def load_checkpoint(path, model, optimizer, scheduler, device, scaler=None):
     if not os.path.exists(path):
         return 0, -1
 
@@ -129,6 +131,9 @@ def load_checkpoint(path, model, optimizer, scheduler, device):
     model.load_state_dict(checkpoint["model"])
     optimizer.load_state_dict(checkpoint["optimizer"])
     scheduler.load_state_dict(checkpoint["scheduler"])
+
+    if scaler and "scaler" in checkpoint and checkpoint["scaler"] is not None:
+        scaler.load_state_dict(checkpoint["scaler"])
 
     return checkpoint["epoch"] + 1, checkpoint.get("best_metric", -1)
 
@@ -155,8 +160,9 @@ def validate(model, config, device, dataset):
         bands = bands.to(device)
         masks = masks.to(device)
 
-        preds, _ = model(bands)
-        loss = loss_fn(preds, masks)
+        with autocast(enabled=(device.type == "cuda")):
+            preds, _ = model(bands)
+            loss = loss_fn(preds, masks)
 
         total_loss += loss.item()
         metrics = compute_metrics(preds, masks)
@@ -177,6 +183,8 @@ def validate(model, config, device, dataset):
 def train(config: dict):
     set_seed(config["seed"])
     device = torch.device(config['device'])
+
+    scaler = GradScaler(enabled=(device.type == "cuda"))
 
     # ===== EXP DIR =====
     if config.get("resume", False):
@@ -265,7 +273,7 @@ def train(config: dict):
     # ===== RESUME =====
     latest_path = os.path.join(exp_dir, "latest.pth")
     start_epoch, best_mcc = load_checkpoint(
-        latest_path, model, optimizer, scheduler, device
+        latest_path, model, optimizer, scheduler, device, scaler
     )
 
     logger.info(f"Start epoch: {start_epoch}, Best MCC: {best_mcc:.4f}")
@@ -283,11 +291,12 @@ def train(config: dict):
 
         for i, (bands, masks) in enumerate(pbar):
 
-            bands = bands.to(device)
-            masks = masks.to(device)
+            bands = bands.to(device, non_blocking=True)
+            masks = masks.to(device, non_blocking=True)
 
-            preds, _ = model(bands)
-            raw_loss = loss_fn(preds, masks)
+            with autocast(enabled=(device.type == "cuda")):
+                preds, _ = model(bands)
+                raw_loss = loss_fn(preds, masks)
 
             if not torch.isfinite(raw_loss):
                 logger.warning("Skipping non-finite loss")
@@ -295,11 +304,15 @@ def train(config: dict):
                 continue
 
             loss = raw_loss / accum_steps
-            loss.backward()
+            scaler.scale(loss).backward()
 
             if (i + 1) % accum_steps == 0:
+                scaler.unscale_(optimizer)
                 torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-                optimizer.step()
+
+                scaler.step(optimizer)
+                scaler.update()
+
                 optimizer.zero_grad()
 
             total_train_loss += raw_loss.item()
@@ -307,15 +320,21 @@ def train(config: dict):
 
         scheduler.step()
 
+        # leftover step
         if len(train_loader) % accum_steps != 0:
+            scaler.unscale_(optimizer)
             torch.nn.utils.clip_grad_norm_(model.parameters(), 1.0)
-            optimizer.step()
+
+            scaler.step(optimizer)
+            scaler.update()
+
             optimizer.zero_grad()
 
         avg_train_loss = total_train_loss / len(train_loader)
 
         # ===== VALIDATION =====
         val_loss, val_metrics = validate(model, config, device, val_dataset)
+        lr = scheduler.get_last_lr()[0]
 
         # ===== LOGGING =====
         logger.info(f"Epoch {epoch}")
@@ -328,8 +347,9 @@ def train(config: dict):
             f"F1: {val_metrics['F1']:.4f} | "
             f"MCC: {val_metrics['MCC']:.4f}"
         )
+        logger.info(f"LR: {lr: .7f}")
 
-        log_csv(csv_path, epoch, avg_train_loss, val_loss, val_metrics)
+        log_csv(csv_path, epoch, avg_train_loss, val_loss, val_metrics, lr)
 
         # ===== SAVE LATEST =====
         save_model(
@@ -340,7 +360,8 @@ def train(config: dict):
             epoch,
             tag="latest",
             best_metric=best_mcc,
-            loss=avg_train_loss
+            loss=avg_train_loss,
+            scaler=scaler
         )
 
         # ===== SAVE BEST =====
@@ -357,7 +378,8 @@ def train(config: dict):
                 epoch,
                 tag="best",
                 best_metric=best_mcc,
-                loss=avg_train_loss
+                loss=avg_train_loss,
+                scaler=scaler
             )
 
     logger.info("Training complete")

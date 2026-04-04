@@ -49,7 +49,7 @@ model_config = {
     # ================= OPTIMIZATION =================
     "learning_rate": 1e-4,
     "warmup_multiplier": 1.5,
-    "warm_epoch": 1,
+    "warm_epochs": 1,
 
     # ================= LOSS =================
     "num_classes": 2,
