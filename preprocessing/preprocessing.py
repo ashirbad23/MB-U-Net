@@ -6,6 +6,7 @@ import rasterio
 from rasterio.merge import merge
 from scipy.ndimage import gaussian_filter
 import xdem
+import random
 
 
 PATCH = 512
@@ -194,7 +195,8 @@ def extract_patches(img_mosaic, mask_mosaic, terrain_features):
             mask_patch = mask_mosaic[:, y:y+PATCH, x:x+PATCH]
 
             if mask_patch.sum() < 50:
-                continue
+                if random.random() > 0.3:
+                    continue
 
             r = y // PATCH
             c = x // PATCH
