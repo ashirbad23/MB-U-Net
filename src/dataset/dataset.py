@@ -94,14 +94,14 @@ if __name__ == "__main__":
     CONFIG = ROOT / "config"
     transform = GlacierTransform()
     dataset = GlacierDataset(path=DATASET,
-                             patch_size=64,
-                             overlap=0.5,
-                             mode='train',
+                             patch_size=512,
+                             overlap=1,
+                             mode=None,
                              mode_path=CONFIG / "train_val_split.json",
                              transform=transform,
-                             bands_used=[0, 1, 2, 3, 4, 5])
+                             bands_used=None)
     # img, mask = dataset[1000]
-    img, mask = dataset[1000]
+    img, mask = dataset[0]
     print(torch.unique(mask))
     print(img.shape, mask.shape)
     print(len(dataset))

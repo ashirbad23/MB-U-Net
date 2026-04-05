@@ -7,7 +7,7 @@ from pathlib import Path
 import torch
 import torch.optim as optim
 from tqdm import tqdm
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 from torch.cuda.amp import autocast, GradScaler
 
 from src.dataset.dataset import GlacierDataset
@@ -334,7 +334,7 @@ def train(config: dict):
 
         # ===== VALIDATION =====
         val_loss, val_metrics = validate(model, config, device, val_dataset)
-        lr = scheduler.get_last_lr()[0]
+        lr = scheduler.get_lr()[0]
 
         # ===== LOGGING =====
         logger.info(f"Epoch {epoch}")
@@ -347,7 +347,7 @@ def train(config: dict):
             f"F1: {val_metrics['F1']:.4f} | "
             f"MCC: {val_metrics['MCC']:.4f}"
         )
-        logger.info(f"LR: {lr: .7f}")
+        logger.info(f"LR: {lr}")
 
         log_csv(csv_path, epoch, avg_train_loss, val_loss, val_metrics, lr)
 
