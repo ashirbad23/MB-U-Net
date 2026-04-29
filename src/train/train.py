@@ -260,7 +260,8 @@ def train(config: dict):
     # ===== SCHEDULER =====
     cosine = optim.lr_scheduler.CosineAnnealingLR(
         optimizer=optimizer,
-        T_max=config["epochs"]
+        T_max=config["epochs"],
+        eta_min=config["min_lr"]
     )
 
     scheduler = GradualWarmupScheduler(

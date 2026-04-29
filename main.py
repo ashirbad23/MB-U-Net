@@ -48,6 +48,7 @@ model_config = {
 
     # ================= OPTIMIZATION =================
     "learning_rate": 1e-4,
+    "min_lr": 1e-5,
     "warmup_multiplier": 1.5,
     "warm_epochs": 1,
 
