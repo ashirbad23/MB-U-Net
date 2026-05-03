@@ -194,7 +194,7 @@ def extract_patches(img_mosaic, mask_mosaic, terrain_features):
 
             mask_patch = mask_mosaic[:, y:y+PATCH, x:x+PATCH]
 
-            if mask_patch.sum() < 50:
+            if mask_patch.sum() == 0:
                 if random.random() > 0.3:
                     continue
 
