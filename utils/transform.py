@@ -16,8 +16,22 @@ class GlacierTransform:
         img: (C, H, W)
         """
         for c in range(img.shape[0]):
+
+            # skip sin/cos
             if c in self.skip_channels:
                 continue
+
+            # ---- PRE-CLIP (THIS IS THE FIX) ----
+            if c in [11, 16]:
+                img[c] = torch.clamp(img[c], -1, 1)
+
+            elif c in [10, 12, 13, 14]:
+                img[c] = torch.clamp(img[c], -0.1, 0.1)
+
+            elif c == 15:
+                img[c] = torch.clamp(img[c], -0.01, 0.01)
+
+            # ---- NORMALIZE ----
             img[c] = (img[c] - mean[c]) / std[c]
 
         return img
@@ -42,11 +56,14 @@ class GlacierTransform:
         std = torch.tensor(std).float()
 
         # avoid divide by zero
-        std[std < 1e-6] = 1e-6
+        std[std < 0.1] = 0.1
 
         # Normalize
         if self.normalize:
             img = self.normalize_img_mask(img, mean, std)
+
+            # ---- FINAL SAFETY CLAMP ----
+            img = torch.clamp(img, -5, 5)
 
         # Augment
         if self.use_rotation:
