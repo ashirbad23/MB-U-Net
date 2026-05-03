@@ -19,6 +19,7 @@ from utils.save_model import save_model
 from utils.sampler import GlacierBalancedSampler
 
 from src.model.model import SUnetSimple
+from src.model.StandardUNet import SUnet
 
 import random
 import numpy as np
@@ -224,24 +225,35 @@ def train(config: dict):
         bands_used=config["bands_used"]
     )
 
-    sampler = GlacierBalancedSampler(
-        dataset=train_dataset,
-        batch_size=config['batch_size']
-    )
+    # sampler = GlacierBalancedSampler(
+    #     dataset=train_dataset,
+    #     batch_size=config['batch_size']
+    # )
 
     train_loader = DataLoader(
         train_dataset,
-        batch_sampler=sampler,
+        # batch_sampler=sampler,
+        batch_size=config['batch_size'],
         num_workers=config['num_workers'],
         pin_memory=True,
     )
 
     # ===== MODEL =====
-    model = SUnetSimple(
+    # model = SUnetSimple(
+    #     ch_head=config["channel_head"],
+    #     in_ch=config["in_channels"],
+    #     out_ch=config["out_channels"],
+    #     num_res_blocks=config["num_res_blocks"],
+    #     attn=config["use_attention"],
+    #     se=config["use_se"],
+    #     dropout=config["dropout"]
+    # ).to(device)
+
+    model = SUnet(
         ch_head=config["channel_head"],
         in_ch=config["in_channels"],
         out_ch=config["out_channels"],
-        num_res_blocks=config["num_res_blocks"],
+        num_levels=config["num_levels"],
         attn=config["use_attention"],
         se=config["use_se"],
         dropout=config["dropout"]
