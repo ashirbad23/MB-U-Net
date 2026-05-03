@@ -110,29 +110,33 @@ class UpBlock(nn.Module):
 
 
 class SUnet(nn.Module):
-    def __init__(self, ch_head, in_ch, out_ch, dropout, attn=True, se=True):
+    def __init__(self, ch_head, in_ch, out_ch, num_levels, dropout, attn=True, se=True):
         super().__init__()
 
         self.head = nn.Conv2d(in_ch, ch_head, 3, padding=1)
 
-        # channel multipliers
-        ch_mult = [1, 2, 4, 8]
+        # channel multipliers (extendable)
+        base_mult = [1, 2, 4, 8, 16, 32]
+        ch_mult = base_mult[:num_levels]
         chs = [ch_head * m for m in ch_mult]
 
         # Encoder
-        self.down1 = DownBlock(ch_head, chs[0], dropout, attn)
-        self.down2 = DownBlock(chs[0], chs[1], dropout, attn)
-        self.down3 = DownBlock(chs[1], chs[2], dropout, attn)
-        self.down4 = DownBlock(chs[2], chs[3], dropout, attn)
+        self.down_blocks = nn.ModuleList()
+        prev_ch = ch_head
+        for ch in chs:
+            self.down_blocks.append(DownBlock(prev_ch, ch, dropout, attn))
+            prev_ch = ch
 
         # Bottleneck
-        self.bottleneck = ResBlock(chs[3], chs[3]*2, dropout, attn)
+        self.bottleneck = ResBlock(chs[-1], chs[-1]*2, dropout, attn)
 
         # Decoder
-        self.up1 = UpBlock(chs[3]*2, chs[3], dropout, attn)
-        self.up2 = UpBlock(chs[3], chs[2], dropout, attn)
-        self.up3 = UpBlock(chs[2], chs[1], dropout, attn)
-        self.up4 = UpBlock(chs[1], chs[0], dropout, attn)
+        self.up_blocks = nn.ModuleList()
+        rev_chs = list(reversed(chs))
+        prev_ch = chs[-1]*2
+        for ch in rev_chs:
+            self.up_blocks.append(UpBlock(prev_ch, ch, dropout, attn))
+            prev_ch = ch
 
         self.tail = nn.Sequential(
             nn.Conv2d(chs[0], chs[0], 3, padding=1),
@@ -154,17 +158,16 @@ class SUnet(nn.Module):
 
         x = self.head(x)
 
-        s1, x = self.down1(x)
-        s2, x = self.down2(x)
-        s3, x = self.down3(x)
-        s4, x = self.down4(x)
+        skips = []
+        for down in self.down_blocks:
+            s, x = down(x)
+            skips.append(s)
 
         x = self.bottleneck(x)
 
-        x = self.up1(x, s4)
-        x = self.up2(x, s3)
-        x = self.up3(x, s2)
-        x = self.up4(x, s1)
+        for up in self.up_blocks:
+            skip = skips.pop()
+            x = up(x, skip)
 
         out = self.tail(x)
 
@@ -177,12 +180,14 @@ if __name__ == "__main__":
     in_channels = 18
     out_channels = 1
     ch_head = 32
+    num_levels = 4   # 🔥 THIS controls depth now (But don't increase the depth beyond 5 for 64x64 input)
     dropout = 0.1
 
     model = SUnet(
         ch_head=ch_head,
         in_ch=in_channels,
         out_ch=out_channels,
+        num_levels=num_levels,
         dropout=dropout,
         attn=True,
         se=True
@@ -191,3 +196,4 @@ if __name__ == "__main__":
     H, W = 64, 64
 
     summary(model, (in_channels, H, W), batch_size=4)
+
