@@ -25,7 +25,7 @@ model_config = {
     "device": "cuda" if torch.cuda.is_available() else "cpu",
 
     # ================= DATA =================
-    "patch_size": 64,
+    "patch_size": 128,
     "overlap_train": 0.5,
     "overlap_val": 1,
 
@@ -37,12 +37,13 @@ model_config = {
     "out_channels": 1,
     "channel_head": 32,
     "num_res_blocks": 2,
+    "num_levels": 4,
     "dropout": 0.1,
     "use_attention": False,
-    "use_se": True,
+    "use_se": False,
 
     # ================= TRAINING =================
-    "batch_size": 8,
+    "batch_size": 16,
     "num_workers": 8,
     "epochs": 10,
 
