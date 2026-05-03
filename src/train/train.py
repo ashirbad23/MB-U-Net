@@ -312,7 +312,7 @@ def train(config: dict):
                 raw_loss = loss_fn(preds, masks)
 
             if not torch.isfinite(raw_loss):
-                logger.warning("Skipping non-finite loss")
+                logger.warning(f"Skipping non-finite loss; Loss: {raw_loss.item()}; Batch: {i}")
                 optimizer.zero_grad()
                 continue
 
