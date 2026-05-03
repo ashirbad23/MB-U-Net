@@ -260,7 +260,11 @@ def train(config: dict):
     ).to(device)
 
     # ===== LOSS =====
-    loss_fn = FocalDiceLoss()
+    loss_fn = FocalDiceLoss(
+        gamma=1.5,
+        alpha=0.5,
+        dice_weight=0.3
+    )
 
     # ===== OPTIMIZER =====
     optimizer = optim.AdamW(
