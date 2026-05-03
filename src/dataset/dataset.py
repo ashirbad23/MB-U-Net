@@ -87,37 +87,86 @@ class GlacierDataset(Dataset):
 
 
 if __name__ == "__main__":
-    ROOT = Path(__file__).resolve().parent
-    ROOT = ROOT.parent.parent
+    from pathlib import Path
+    import numpy as np
+    from tqdm import tqdm
 
+    ROOT = Path(__file__).resolve().parent.parent.parent
     DATASET = ROOT / "dataset"
-    CONFIG = ROOT / "config"
-    transform = GlacierTransform()
-    dataset = GlacierDataset(path=DATASET,
-                             patch_size=128,
-                             overlap=0.5,
-                             mode="train",
-                             mode_path=CONFIG / "train_val_split.json",
-                             transform=transform,
-                             bands_used=None)
-    # img, mask = dataset[1000]
-    img, mask = dataset[0]
-    print(torch.unique(mask))
-    print(img.shape, mask.shape)
-    print(len(dataset))
-    for i in range(img.shape[0]):
-        print(i, img[i].min(), img[i].max())
 
-    # background = 0
-    # glacier = 0
-    #
-    # for i in range(len(dataset)):
-    #     _, mask = dataset[i]
-    #     if mask.sum() == 0:
-    #         background += 1
-    #     else:
-    #         glacier += 1
-    #
-    # print("background:", background)
-    # print("glacier:", glacier)
+    # =========================
+    # Helper: collect stats
+    # =========================
+    def analyze_dataset(dataset, title, extreme_thresh=None):
+        print(f"\n===== {title} =====")
 
+        channel_vals = None
+        extreme_samples = []
+
+        for i in tqdm(range(len(dataset))):
+            img, _ = dataset[i]
+            img = img.numpy()
+
+            if channel_vals is None:
+                channel_vals = [[] for _ in range(img.shape[0])]
+
+            # collect per-channel values
+            for c in range(img.shape[0]):
+                channel_vals[c].append(img[c].reshape(-1))
+
+            # optional extreme detection
+            if extreme_thresh is not None:
+                max_val = np.abs(img).max()
+                if max_val > extreme_thresh:
+                    extreme_samples.append((i, max_val))
+
+        # concat all values
+        for c in range(len(channel_vals)):
+            channel_vals[c] = np.concatenate(channel_vals[c])
+
+        # print stats
+        for c, vals in enumerate(channel_vals):
+            p = np.percentile(vals, [0, 1, 50, 99, 99.9, 100])
+
+            print(f"\nChannel {c}")
+            print("min      :", p[0])
+            print("1%       :", p[1])
+            print("median   :", p[2])
+            print("99%      :", p[3])
+            print("99.9%    :", p[4])
+            print("max      :", p[5])
+
+        # extreme summary
+        if extreme_thresh is not None:
+            print("\nExtreme samples:", len(extreme_samples))
+            if extreme_samples:
+                print("Top 5 extremes:")
+                print(sorted(extreme_samples, key=lambda x: -x[1])[:5])
+
+    # =========================
+    # RAW DATA ANALYSIS
+    # =========================
+    raw_dataset = GlacierDataset(
+        path=DATASET,
+        patch_size=512,
+        overlap=1,
+        mode=None,
+        transform=None,
+        bands_used=None
+    )
+
+    analyze_dataset(raw_dataset, "RAW DATA")
+
+    # =========================
+    # AFTER TRANSFORM ANALYSIS
+    # =========================
+    transformed_dataset = GlacierDataset(
+        path=DATASET,
+        patch_size=512,
+        overlap=1,
+        mode=None,
+        transform=GlacierTransform(),
+        bands_used=None
+    )
+
+    analyze_dataset(transformed_dataset, "AFTER TRANSFORM", extreme_thresh=20)
