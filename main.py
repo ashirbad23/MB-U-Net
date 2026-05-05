@@ -35,10 +35,10 @@ model_config = {
     # ================= MODEL =================
     "in_channels": 18,
     "out_channels": 1,
-    "channel_head": 32,
+    "channel_head": 16,
     "num_res_blocks": 2,
     "num_levels": 4,
-    "dropout": 0.1,
+    "dropout": 0.2,
     "use_attention": False,
     "use_se": False,
 
@@ -55,7 +55,10 @@ model_config = {
 
     # ================= LOSS =================
     "num_classes": 2,
-    "accum_steps": 2
+    "accum_steps": 2,
+    "gamma": 1.5,
+    "alpha": 0.45,
+    "dice_weight": 0.35
 }
 
 if __name__ == "__main__":
