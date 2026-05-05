@@ -12,14 +12,14 @@ from torch.cuda.amp import autocast, GradScaler
 
 from src.dataset.dataset import GlacierDataset
 from utils.transform import GlacierTransform
-from utils.loss import FocalDiceLoss
+from utils.loss import FocalDiceLoss, BCEDiceLoss
 from utils.metrics import compute_metrics
 from utils.scheduler import GradualWarmupScheduler
 from utils.save_model import save_model
 from utils.sampler import GlacierBalancedSampler
 
 from src.model.model import SUnetSimple
-from src.model.StandardUNet import SUnet
+from src.model.StandardUNet import SUnet, MultiBranchUNet
 
 import random
 import numpy as np
@@ -151,7 +151,7 @@ def validate(model, config, device, dataset):
     )
 
     model.eval()
-    loss_fn = FocalDiceLoss()
+    loss_fn = BCEDiceLoss()
 
     total_loss = 0
     total_metrics = {k: 0 for k in ["IoU", "Precision", "Recall", "F1", "MCC"]}
@@ -249,21 +249,29 @@ def train(config: dict):
     #     dropout=config["dropout"]
     # ).to(device)
 
-    model = SUnet(
+    # model = SUnet(
+    #     ch_head=config["channel_head"],
+    #     in_ch=config["in_channels"],
+    #     out_ch=config["out_channels"],
+    #     num_levels=config["num_levels"],
+    #     attn=config["use_attention"],
+    #     se=config["use_se"],
+    #     dropout=config["dropout"]
+    # ).to(device)
+
+    model = MultiBranchUNet(
         ch_head=config["channel_head"],
         in_ch=config["in_channels"],
         out_ch=config["out_channels"],
         num_levels=config["num_levels"],
+        bands_used=config["bands_used"],
         attn=config["use_attention"],
-        se=config["use_se"],
         dropout=config["dropout"]
     ).to(device)
 
     # ===== LOSS =====
-    loss_fn = FocalDiceLoss(
-        gamma=1.5,
-        alpha=0.5,
-        dice_weight=0.3
+    loss_fn = BCEDiceLoss(
+        dice_weight=config['dice_weight']
     )
 
     # ===== OPTIMIZER =====
@@ -274,18 +282,18 @@ def train(config: dict):
     )
 
     # ===== SCHEDULER =====
-    cosine = optim.lr_scheduler.CosineAnnealingLR(
+    scheduler = optim.lr_scheduler.CosineAnnealingLR(
         optimizer=optimizer,
-        T_max=config["epochs"],
+        T_max=50,
         eta_min=config["min_lr"]
     )
 
-    scheduler = GradualWarmupScheduler(
-        optimizer=optimizer,
-        multiplier=config["warmup_multiplier"],
-        warm_epoch=config["warm_epochs"],
-        after_scheduler=cosine
-    )
+    # scheduler = GradualWarmupScheduler(
+    #     optimizer=optimizer,
+    #     multiplier=config["warmup_multiplier"],
+    #     warm_epoch=config["warm_epochs"],
+    #     after_scheduler=cosine
+    # )
 
     # ===== RESUME =====
     latest_path = os.path.join(exp_dir, "latest.pth")
@@ -351,7 +359,7 @@ def train(config: dict):
 
         # ===== VALIDATION =====
         val_loss, val_metrics = validate(model, config, device, val_dataset)
-        lr = scheduler.get_lr()[0]
+        lr = scheduler.get_last_lr()[0]
 
         # ===== LOGGING =====
         logger.info(f"Epoch {epoch}")
