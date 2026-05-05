@@ -8,6 +8,7 @@ ROOT = Path(__file__).resolve().parent
 DATASET = ROOT / "dataset"
 CONFIG = ROOT / "config"
 CHECKPOINTS = ROOT / "model_checkpoints"
+CACHE = ROOT / "cache"
 
 model_config = {
     "mode": "train",
@@ -58,7 +59,9 @@ model_config = {
     "accum_steps": 2,
     "gamma": 1.5,
     "alpha": 0.45,
-    "dice_weight": 0.35
+    "dice_weight": 0.35,
+
+    "sampler_cache": str(CACHE / "sampler_help.json")
 }
 
 if __name__ == "__main__":
