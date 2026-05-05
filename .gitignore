@@ -8,6 +8,7 @@
 /preprocessing/assets/
 /data/
 /config/*.py
+/cache/
 # ===============================
 
 # MODEL WEIGHTS / CHECKPOINTS
