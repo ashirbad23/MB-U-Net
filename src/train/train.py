@@ -99,7 +99,7 @@ def init_csv(log_dir):
         writer = csv.writer(f)
         writer.writerow([
             "epoch", "train_loss", "val_loss",
-            "IoU", "Precision", "Recall", "F1", "MCC"
+            "IoU", "Precision", "Recall", "F1", "MCC", "lr"
         ])
 
     return csv_path
@@ -142,7 +142,7 @@ def load_checkpoint(path, model, optimizer, scheduler, device, scaler=None):
 # ================= VALIDATION =================
 
 @torch.no_grad()
-def validate(model, config, device, dataset):
+def validate(model, loss_fn, config, device, dataset):
     loader = DataLoader(
         dataset,
         batch_size=config['batch_size'],
@@ -151,7 +151,6 @@ def validate(model, config, device, dataset):
     )
 
     model.eval()
-    loss_fn = BCEDiceLoss()
 
     total_loss = 0
     total_metrics = {k: 0 for k in ["IoU", "Precision", "Recall", "F1", "MCC"]}
@@ -304,6 +303,9 @@ def train(config: dict):
 
     logger.info(f"Start epoch: {start_epoch}, Best MCC: {best_mcc:.4f}")
 
+    patience = config.get("patience", 8)
+    epochs_no_improve = 0
+
     # ================= TRAIN LOOP =================
     for epoch in range(start_epoch, config["epochs"]):
 
@@ -344,8 +346,6 @@ def train(config: dict):
             total_train_loss += raw_loss.item()
             pbar.set_postfix({"loss": f"{raw_loss.item():.4f}"})
 
-        scheduler.step()
-
         # leftover step
         if len(train_loader) % accum_steps != 0:
             scaler.unscale_(optimizer)
@@ -359,7 +359,7 @@ def train(config: dict):
         avg_train_loss = total_train_loss / len(train_loader)
 
         # ===== VALIDATION =====
-        val_loss, val_metrics = validate(model, config, device, val_dataset)
+        val_loss, val_metrics = validate(model, loss_fn, config, device, val_dataset)
         lr = scheduler.get_last_lr()[0]
 
         # ===== LOGGING =====
@@ -377,6 +377,8 @@ def train(config: dict):
 
         log_csv(csv_path, epoch, avg_train_loss, val_loss, val_metrics, lr)
 
+        scheduler.step()
+
         # ===== SAVE LATEST =====
         save_model(
             exp_dir,
@@ -393,6 +395,7 @@ def train(config: dict):
         # ===== SAVE BEST =====
         if val_metrics["MCC"] > best_mcc:
             best_mcc = val_metrics["MCC"]
+            epochs_no_improve = 0
 
             logger.info(f"New best MCC: {best_mcc:.4f}")
 
@@ -407,5 +410,12 @@ def train(config: dict):
                 loss=avg_train_loss,
                 scaler=scaler
             )
+        else:
+            epochs_no_improve += 1
+            logger.info(f"No improvement for {epochs_no_improve} epochs")
+
+        if epochs_no_improve >= patience:
+            logger.info(f"Early stopping triggered at epoch {epoch}")
+            break
 
     logger.info("Training complete")
