@@ -1,9 +1,11 @@
 import random
+import json
 from torch.utils.data import Sampler
+from pathlib import Path
 
 
 class GlacierBalancedSampler(Sampler):
-    def __init__(self, dataset, batch_size):
+    def __init__(self, dataset, batch_size, cache_path=None):
         super().__init__()
 
         self.batch_size = batch_size
@@ -12,21 +14,48 @@ class GlacierBalancedSampler(Sampler):
         self.weak_fg = []
         self.strong_fg = []
 
-        for i in range(len(dataset)):
-            _, mask = dataset[i]
+        if cache_path is not None:
+            cache_path = Path(cache_path)
 
-            if mask.ndim == 3:
-                mask = mask.squeeze(0)
+        # ---- LOAD CACHE ----
+        if cache_path is not None and cache_path.exists():
+            print("⚡ Loading sampler cache...")
+            with open(cache_path, "r") as f:
+                data = json.load(f)
 
-            fg_pixels = mask.sum().item()
-            fg_ratio = fg_pixels / mask.numel()
+            self.pure_bg = data["pure_bg"]
+            self.weak_fg = data["weak_fg"]
+            self.strong_fg = data["strong_fg"]
 
-            if fg_pixels == 0:
-                self.pure_bg.append(i)
-            elif fg_ratio < 0.05:
-                self.weak_fg.append(i)
-            else:
-                self.strong_fg.append(i)
+        else:
+            print("Building sampler cache...")
+
+            for i in range(len(dataset)):
+                _, mask = dataset[i]
+
+                if mask.ndim == 3:
+                    mask = mask.squeeze(0)
+
+                fg_pixels = mask.sum().item()
+                fg_ratio = fg_pixels / mask.numel()
+
+                if fg_pixels == 0:
+                    self.pure_bg.append(i)
+                elif fg_ratio < 0.05:
+                    self.weak_fg.append(i)
+                else:
+                    self.strong_fg.append(i)
+
+            # ---- SAVE CACHE ----
+            if cache_path is not None:
+                with open(cache_path, "w") as f:
+                    json.dump({
+                        "pure_bg": self.pure_bg,
+                        "weak_fg": self.weak_fg,
+                        "strong_fg": self.strong_fg
+                    }, f)
+
+                print("Sampler cache saved")
 
         self.num_batches = len(dataset) // batch_size
 
@@ -46,8 +75,7 @@ class GlacierBalancedSampler(Sampler):
                 batch.append(random.choice(self.strong_fg))
 
             random.shuffle(batch)
-
-            yield batch   # 🔥 IMPORTANT
+            yield batch
 
     def __len__(self):
         return self.num_batches
