@@ -227,7 +227,8 @@ def train(config: dict):
 
     sampler = GlacierBalancedSampler(
         dataset=train_dataset,
-        batch_size=config['batch_size']
+        batch_size=config['batch_size'],
+        cache_path=config['sampler_cache']
     )
 
     train_loader = DataLoader(
