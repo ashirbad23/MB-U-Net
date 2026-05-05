@@ -148,12 +148,13 @@ if __name__ == "__main__":
     # =========================
     raw_dataset = GlacierDataset(
         path=DATASET,
-        patch_size=512,
-        overlap=1,
+        patch_size=128,
+        overlap=0.5,
         mode=None,
         transform=None,
         bands_used=None
     )
+    print(len(raw_dataset))
 
     analyze_dataset(raw_dataset, "RAW DATA")
 
