@@ -128,12 +128,12 @@ class SUnet(nn.Module):
             prev_ch = ch
 
         # Bottleneck
-        self.bottleneck = ResBlock(chs[-1], chs[-1]*2, dropout, True)
+        self.bottleneck = ResBlock(chs[-1], chs[-1] * 2, dropout, True)
 
         # Decoder
         self.up_blocks = nn.ModuleList()
         rev_chs = list(reversed(chs))
-        prev_ch = chs[-1]*2
+        prev_ch = chs[-1] * 2
         for ch in rev_chs:
             self.up_blocks.append(UpBlock(prev_ch, ch, dropout, attn))
             prev_ch = ch
@@ -174,23 +174,164 @@ class SUnet(nn.Module):
         return out, geo_weights
 
 
+import torch
+import torch.nn as nn
+
+
+class MultiBranchUNet(nn.Module):
+    def __init__(self, ch_head, in_ch, out_ch, num_levels, dropout, bands_used=None, attn=False):
+        super().__init__()
+
+        # ---- BAND GROUPS (FIXED DEFINITIONS) ----
+        self.all_sat = [0, 1, 2, 3, 4, 5]
+        self.all_dem = [6, 7, 8, 9]
+        self.all_curv = [10, 11, 12, 13, 14, 15, 16, 17]
+
+        self.bands_used = bands_used if bands_used is not None else list(range(in_ch))
+
+        # ---- FILTER ACTIVE CHANNELS ----
+        self.sat_idx = [i for i in self.all_sat if i in self.bands_used]
+        self.dem_idx = [i for i in self.all_dem if i in self.bands_used]
+        self.curv_idx = [i for i in self.all_curv if i in self.bands_used]
+
+        self.sat_ch = len(self.sat_idx)
+        self.dem_ch = len(self.dem_idx)
+        self.curv_ch = len(self.curv_idx)
+
+        assert self.sat_ch + self.dem_ch + self.curv_ch == len(self.bands_used)
+
+        # ---- CHANNEL SIZES ----
+        base_mult = [1, 2, 4, 8, 16, 32]
+        ch_mult = base_mult[:num_levels]
+        chs = [ch_head * m for m in ch_mult]
+
+        # ---- BUILD ENCODERS ONLY IF NEEDED ----
+        if self.sat_ch > 0:
+            self.enc_sat = self._make_encoder(self.sat_ch, ch_head, chs, dropout, attn)
+
+        if self.dem_ch > 0:
+            self.enc_dem = self._make_encoder(self.dem_ch, ch_head, chs, dropout, attn)
+
+        if self.curv_ch > 0:
+            self.enc_curv = self._make_encoder(self.curv_ch, ch_head, chs, dropout, attn)
+
+        # ---- COUNT ACTIVE BRANCHES ----
+        self.num_branches = sum([self.sat_ch > 0, self.dem_ch > 0, self.curv_ch > 0])
+
+        # ---- BOTTLENECK ----
+        self.bottleneck_fuse = nn.Conv2d(chs[-1] * self.num_branches, chs[-1], 1)
+        self.bottleneck = ResBlock(chs[-1], chs[-1] * 2, dropout, True)
+
+        # ---- SKIP FUSION ----
+        self.skip_fuse = nn.ModuleList([
+            nn.Conv2d(ch * self.num_branches, ch, kernel_size=1) for ch in chs
+        ])
+
+        # ---- DECODER ----
+        self.up_blocks = nn.ModuleList()
+        rev_chs = list(reversed(chs))
+        prev_ch = chs[-1] * 2
+
+        for ch in rev_chs:
+            self.up_blocks.append(UpBlock(prev_ch, ch, dropout, attn))
+            prev_ch = ch
+
+        self.tail = nn.Sequential(
+            nn.Conv2d(chs[0], chs[0], 3, padding=1),
+            nn.InstanceNorm2d(chs[0]),
+            Swish(),
+            nn.Conv2d(chs[0], out_ch, 1)
+        )
+
+    def _make_encoder(self, in_ch, ch_head, chs, dropout, attn):
+        layers = nn.ModuleList()
+        head = nn.Conv2d(in_ch, ch_head, 3, padding=1)
+
+        prev_ch = ch_head
+        for ch in chs:
+            layers.append(DownBlock(prev_ch, ch, dropout, attn))
+            prev_ch = ch
+
+        return nn.ModuleDict({
+            "head": head,
+            "blocks": layers
+        })
+
+    def _forward_encoder(self, x, encoder):
+        x = encoder["head"](x)
+        skips = []
+
+        for down in encoder["blocks"]:
+            s, x = down(x)
+            skips.append(s)
+
+        return x, skips
+
+    def forward(self, x):
+        features = []
+        skips_all = []
+
+        # ---- SAT ----
+        if self.sat_ch > 0:
+            sat = x[:, self.sat_idx]
+            sat_x, sat_skips = self._forward_encoder(sat, self.enc_sat)
+            features.append(sat_x)
+            skips_all.append(sat_skips)
+
+        # ---- DEM ----
+        if self.dem_ch > 0:
+            dem = x[:, self.dem_idx]
+            dem_x, dem_skips = self._forward_encoder(dem, self.enc_dem)
+            features.append(dem_x)
+            skips_all.append(dem_skips)
+
+        # ---- CURV ----
+        if self.curv_ch > 0:
+            curv = x[:, self.curv_idx]
+            curv_x, curv_skips = self._forward_encoder(curv, self.enc_curv)
+            features.append(curv_x)
+            skips_all.append(curv_skips)
+
+        # ---- BOTTLENECK ----
+        x = torch.cat(features, dim=1)
+        x = self.bottleneck_fuse(x)
+        x = self.bottleneck(x)
+
+        # ---- SKIP FUSION ----
+        fused_skips = []
+        depth = len(skips_all[0])
+
+        for i in range(depth):
+            to_concat = [skips[i] for skips in skips_all]
+            fused = torch.cat(to_concat, dim=1)
+            fused = self.skip_fuse[i](fused)
+            fused_skips.append(fused)
+
+        # ---- DECODE ----
+        for up in self.up_blocks:
+            skip = fused_skips.pop()
+            x = up(x, skip)
+
+        out = self.tail(x)
+        return out, None
+
+
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     in_channels = 18
     out_channels = 1
     ch_head = 32
-    num_levels = 4   # 🔥 THIS controls depth now (But don't increase the depth beyond 5 for 64x64 input)
+    num_levels = 4  # 🔥 THIS controls depth now (But don't increase the depth beyond 5 for 64x64 input)
     dropout = 0.1
 
-    model = SUnet(
+    model = MultiBranchUNet(
         ch_head=ch_head,
         in_ch=in_channels,
         out_ch=out_channels,
         num_levels=num_levels,
         dropout=dropout,
-        attn=False,
-        se=True
+        attn=False
     ).to(device)
 
     H, W = 256, 256
