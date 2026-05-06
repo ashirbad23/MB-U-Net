@@ -31,10 +31,10 @@ model_config = {
     "overlap_val": 1,
 
     # ================= BANDS =================
-    "bands_used": None,
+    "bands_used": list(range(0, 10)),
 
     # ================= MODEL =================
-    "in_channels": 18,
+    "in_channels": 10,
     "out_channels": 1,
     "channel_head": 16,
     "num_res_blocks": 2,
@@ -46,7 +46,7 @@ model_config = {
     # ================= TRAINING =================
     "batch_size": 16,
     "num_workers": 8,
-    "epochs": 10,
+    "epochs": 50,
 
     # ================= OPTIMIZATION =================
     "learning_rate": 1e-4,

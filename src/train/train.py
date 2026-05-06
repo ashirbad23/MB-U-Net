@@ -288,7 +288,7 @@ def train(config: dict):
     optimizer = optim.AdamW(
         model.parameters(),
         lr=config["learning_rate"],
-        weight_decay=1e-4
+        weight_decay = 3e-4
     )
 
     # ===== SCHEDULER =====
