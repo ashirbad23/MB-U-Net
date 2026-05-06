@@ -1,10 +1,7 @@
 import torch
 
 
-def _confusion_matrix(preds, targets):
-    """
-    preds, targets: [B, 1, H, W] (binary 0/1)
-    """
+def confusion_matrix(preds, targets):
     preds = preds.view(-1)
     targets = targets.view(-1)
 
@@ -16,50 +13,59 @@ def _confusion_matrix(preds, targets):
     return TP, TN, FP, FN
 
 
-def iou_score(preds, targets, eps=1e-6):
-    TP, _, FP, FN = _confusion_matrix(preds, targets)
-    return TP / (TP + FP + FN + eps)
+def compute_metrics_from_cm(TP, TN, FP, FN, eps=1e-6):
+    iou = TP / (TP + FP + FN + eps)
+    precision = TP / (TP + FP + eps)
+    recall = TP / (TP + FN + eps)
+    f1 = 2 * precision * recall / (precision + recall + eps)
 
-
-def precision_score(preds, targets, eps=1e-6):
-    TP, _, FP, _ = _confusion_matrix(preds, targets)
-    return TP / (TP + FP + eps)
-
-
-def recall_score(preds, targets, eps=1e-6):
-    TP, _, _, FN = _confusion_matrix(preds, targets)
-    return TP / (TP + FN + eps)
-
-
-def f1_score(preds, targets, eps=1e-6):
-    precision = precision_score(preds, targets, eps)
-    recall = recall_score(preds, targets, eps)
-    return 2 * (precision * recall) / (precision + recall + eps)
-
-
-def mcc_score(preds, targets, eps=1e-6):
-    TP, TN, FP, FN = _confusion_matrix(preds, targets)
-
-    numerator = (TP * TN) - (FP * FN)
-    denominator = torch.sqrt(
+    mcc = (TP * TN - FP * FN) / torch.sqrt(
         (TP + FP) * (TP + FN) * (TN + FP) * (TN + FN) + eps
     )
 
-    return numerator / (denominator + eps)
-
-
-def compute_metrics(preds, targets):
-    """
-    preds: logits [B, 1, H, W]
-    targets: [B, 1, H, W]
-    """
-    preds = torch.sigmoid(preds)
-    preds = (preds > 0.5).float()
-
     return {
-        "IoU": iou_score(preds, targets).item(),
-        "Precision": precision_score(preds, targets).item(),
-        "Recall": recall_score(preds, targets).item(),
-        "F1": f1_score(preds, targets).item(),
-        "MCC": mcc_score(preds, targets).item()
+        "IoU": iou.item(),
+        "Precision": precision.item(),
+        "Recall": recall.item(),
+        "F1": f1.item(),
+        "MCC": mcc.item()
     }
+
+
+def compute_metrics(preds, targets, threshold=0.5):
+    """
+    preds: logits [B,1,H,W]
+    targets: [B,1,H,W]
+    """
+    probs = torch.sigmoid(preds)
+    preds_bin = (probs > threshold).float()
+
+    TP, TN, FP, FN = confusion_matrix(preds_bin, targets)
+    return compute_metrics_from_cm(TP, TN, FP, FN)
+
+
+def find_best_threshold(preds, targets, thresholds=None):
+    """
+    preds: logits [B,1,H,W]
+    targets: [B,1,H,W]
+    """
+    if thresholds is None:
+        thresholds = torch.linspace(0.2, 0.8, 25)
+
+    probs = torch.sigmoid(preds)
+
+    best_mcc = -1
+    best_t = 0.5
+    best_metrics = None
+
+    for t in thresholds:
+        preds_bin = (probs > t).float()
+        TP, TN, FP, FN = confusion_matrix(preds_bin, targets)
+        metrics = compute_metrics_from_cm(TP, TN, FP, FN)
+
+        if metrics["MCC"] > best_mcc:
+            best_mcc = metrics["MCC"]
+            best_t = t.item()
+            best_metrics = metrics
+
+    return best_t, best_metrics

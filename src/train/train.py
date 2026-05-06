@@ -13,7 +13,7 @@ from torch.cuda.amp import autocast, GradScaler
 from src.dataset.dataset import GlacierDataset
 from utils.transform import GlacierTransform
 from utils.loss import FocalDiceLoss, BCEDiceLoss
-from utils.metrics import compute_metrics
+from utils.metrics import compute_metrics, find_best_threshold
 from utils.scheduler import GradualWarmupScheduler
 from utils.save_model import save_model
 from utils.sampler import GlacierBalancedSampler
@@ -153,8 +153,10 @@ def validate(model, loss_fn, config, device, dataset):
     model.eval()
 
     total_loss = 0
-    total_metrics = {k: 0 for k in ["IoU", "Precision", "Recall", "F1", "MCC"]}
     count = 0
+
+    all_preds = []
+    all_targets = []
 
     for bands, masks in tqdm(loader, desc="Validation", dynamic_ncols=True):
         bands = bands.to(device)
@@ -165,17 +167,25 @@ def validate(model, loss_fn, config, device, dataset):
             loss = loss_fn(preds, masks)
 
         total_loss += loss.item()
-        metrics = compute_metrics(preds, masks)
-
-        for k in total_metrics:
-            total_metrics[k] += metrics[k]
-
         count += 1
 
-    avg_loss = total_loss / count
-    avg_metrics = {k: v / count for k, v in total_metrics.items()}
+        # 🔥 collect for global evaluation
+        all_preds.append(preds.detach().cpu())
+        all_targets.append(masks.detach().cpu())
 
-    return avg_loss, avg_metrics
+    avg_loss = total_loss / count
+
+    # 🔥 concatenate everything
+    all_preds = torch.cat(all_preds, dim=0)
+    all_targets = torch.cat(all_targets, dim=0)
+
+    # ---- metrics @ 0.5 (for reference) ----
+    metrics_05 = compute_metrics(all_preds, all_targets, threshold=0.5)
+
+    # ---- BEST threshold ----
+    best_t, best_metrics = find_best_threshold(all_preds, all_targets)
+
+    return avg_loss, metrics_05, best_metrics, best_t
 
 
 # ================= TRAIN =================
@@ -359,23 +369,28 @@ def train(config: dict):
         avg_train_loss = total_train_loss / len(train_loader)
 
         # ===== VALIDATION =====
-        val_loss, val_metrics = validate(model, loss_fn, config, device, val_dataset)
-        lr = scheduler.get_last_lr()[0]
+        val_loss, metrics_05, best_metrics, best_t = validate(model, loss_fn, config, device, val_dataset)
+        lr = optimizer.param_groups[0]["lr"]
 
         # ===== LOGGING =====
         logger.info(f"Epoch {epoch}")
         logger.info(f"Train Loss: {avg_train_loss:.4f}")
         logger.info(f"Val Loss: {val_loss:.4f}")
+        logger.info(f"Best Threshold: {best_t:.3f}")
         logger.info(
-            f"IoU: {val_metrics['IoU']:.4f} | "
-            f"Precision: {val_metrics['Precision']:.4f} | "
-            f"Recall: {val_metrics['Recall']:.4f} | "
-            f"F1: {val_metrics['F1']:.4f} | "
-            f"MCC: {val_metrics['MCC']:.4f}"
+            f"IoU: {best_metrics['IoU']:.4f} | "
+            f"Precision: {best_metrics['Precision']:.4f} | "
+            f"Recall: {best_metrics['Recall']:.4f} | "
+            f"F1: {best_metrics['F1']:.4f} | "
+        )
+        logger.info(
+            f"[0.5] MCC: {metrics_05['MCC']:.4f} | "
+            f"[best] MCC: {best_metrics['MCC']:.4f} | "
+            f"T: {best_t:.3f}"
         )
         logger.info(f"LR: {lr}")
 
-        log_csv(csv_path, epoch, avg_train_loss, val_loss, val_metrics, lr)
+        log_csv(csv_path, epoch, avg_train_loss, val_loss, best_metrics, lr)
 
         scheduler.step()
 
@@ -389,12 +404,13 @@ def train(config: dict):
             tag="latest",
             best_metric=best_mcc,
             loss=avg_train_loss,
-            scaler=scaler
+            scaler=scaler,
+            extra={"best_threshold": best_t}
         )
 
         # ===== SAVE BEST =====
-        if val_metrics["MCC"] > best_mcc:
-            best_mcc = val_metrics["MCC"]
+        if best_metrics["MCC"] > best_mcc:
+            best_mcc = best_metrics["MCC"]
             epochs_no_improve = 0
 
             logger.info(f"New best MCC: {best_mcc:.4f}")
@@ -408,7 +424,8 @@ def train(config: dict):
                 tag="best",
                 best_metric=best_mcc,
                 loss=avg_train_loss,
-                scaler=scaler
+                scaler=scaler,
+                extra={"best_threshold": best_t}
             )
         else:
             epochs_no_improve += 1
