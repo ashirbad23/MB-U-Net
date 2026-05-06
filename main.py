@@ -13,55 +13,52 @@ CACHE = ROOT / "cache"
 model_config = {
     "mode": "train",
     "seed": 42,
-    # ================= PATHS =================
+
+    # PATHS
     "dataset": str(ROOT / "dataset"),
     "split_path": str(ROOT / "config" / "train_val_split.json"),
     "run_base_dir": str(ROOT / "runs"),
 
-    # ================= RESUME =================
+    # RESUME
     "resume": False,
     "resume_path": None,
 
-    # ================= DEVICE =================
+    # DEVICE
     "device": "cuda" if torch.cuda.is_available() else "cpu",
 
-    # ================= DATA =================
+    # DATA
     "patch_size": 128,
     "overlap_train": 0.5,
     "overlap_val": 1,
 
-    # ================= BANDS =================
-    "bands_used": list(range(0, 10)),
+    # BANDS
+    "bands_used": list(range(10)),
 
-    # ================= MODEL =================
+    # MODEL
     "in_channels": 10,
     "out_channels": 1,
     "channel_head": 16,
-    "num_res_blocks": 2,
     "num_levels": 4,
-    "dropout": 0.2,
+    "dropout": 0.3,
     "use_attention": False,
     "use_se": False,
 
-    # ================= TRAINING =================
+    # TRAINING
     "batch_size": 16,
-    "num_workers": 8,
+    "num_workers": 4,
     "epochs": 50,
 
-    # ================= OPTIMIZATION =================
+    # OPTIMIZATION
     "learning_rate": 1e-4,
     "min_lr": 1e-5,
-    "warmup_multiplier": 1.5,
-    "warm_epochs": 1,
+    "patience": 8,
 
-    # ================= LOSS =================
-    "num_classes": 2,
+    # LOSS
     "accum_steps": 2,
-    "gamma": 1.5,
-    "alpha": 0.45,
-    "dice_weight": 0.35,
+    "dice_weight": 0.5,
 
-    "sampler_cache": str(CACHE / "sampler_help.json")
+    # CACHE
+    "sampler_cache": str(CACHE / "sampler_128_10bands.json")
 }
 
 if __name__ == "__main__":

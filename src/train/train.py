@@ -19,7 +19,7 @@ from utils.save_model import save_model
 from utils.sampler import GlacierBalancedSampler
 
 from src.model.model import SUnetSimple
-from src.model.StandardUNet import SUnet, MultiBranchUNet
+from src.model.StandardUNet import SUnet, MultiBranchUNet, MultiBranchUNetPP
 
 import random
 import numpy as np
@@ -269,7 +269,17 @@ def train(config: dict):
     #     dropout=config["dropout"]
     # ).to(device)
 
-    model = MultiBranchUNet(
+    # model = MultiBranchUNet(
+    #     ch_head=config["channel_head"],
+    #     in_ch=config["in_channels"],
+    #     out_ch=config["out_channels"],
+    #     num_levels=config["num_levels"],
+    #     bands_used=config["bands_used"],
+    #     attn=config["use_attention"],
+    #     dropout=config["dropout"]
+    # ).to(device)
+
+    model = MultiBranchUNetPP(
         ch_head=config["channel_head"],
         in_ch=config["in_channels"],
         out_ch=config["out_channels"],
