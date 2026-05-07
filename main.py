@@ -39,7 +39,7 @@ model_config = {
     "out_channels": 1,
     "channel_head": 16,
     "num_levels": 4,
-    "dropout": 0.3,
+    "dropout": 0.2,
     "use_attention": False,
     "use_se": False,
 
@@ -52,10 +52,11 @@ model_config = {
     "learning_rate": 1e-4,
     "min_lr": 1e-5,
     "patience": 8,
+    "w_decay": 3e-4,
 
     # LOSS
     "accum_steps": 2,
-    "dice_weight": 0.5,
+    "dice_weight": 0.2,
 
     # CACHE
     "sampler_cache": str(CACHE / "sampler_128_10bands.json")
