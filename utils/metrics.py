@@ -44,6 +44,16 @@ def compute_metrics(preds, targets, threshold=0.5):
     return compute_metrics_from_cm(TP, TN, FP, FN)
 
 
+def compute_metrics_direct(preds, targets):
+    """
+    preds: logits [B,1,H,W]
+    targets: [B,1,H,W]
+    """
+
+    TP, TN, FP, FN = confusion_matrix(preds, targets)
+    return compute_metrics_from_cm(TP, TN, FP, FN)
+
+
 def find_best_threshold(preds, targets, thresholds=None):
     """
     preds: logits [B,1,H,W]
