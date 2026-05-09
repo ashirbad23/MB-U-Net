@@ -12,7 +12,7 @@ CHECKPOINTS = ROOT / "model_checkpoints"
 CACHE = ROOT / "cache"
 
 model_config = {
-    "mode": "train",
+    "mode": "test",
     "seed": 42,
 
     # =====================================================
@@ -108,8 +108,8 @@ model_config = {
 
     "test_exp": str(ROOT
                     / "runs"
-                    / "exp_013"),
-    "test_threshold": 0.30,
+                    / "exp_012"),
+    "test_threshold": 0.650,
 
     "ckpt_type": "best"
 }
