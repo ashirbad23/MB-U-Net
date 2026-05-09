@@ -12,7 +12,7 @@ CHECKPOINTS = ROOT / "model_checkpoints"
 CACHE = ROOT / "cache"
 
 model_config = {
-    "mode": "train",
+    "mode": "test",
     "seed": 42,
 
     # =====================================================
@@ -49,13 +49,13 @@ model_config = {
     # BANDS
     # =====================================================
 
-    "bands_used": list(range(18)),
+    "bands_used": list(range(10)),
 
     # =====================================================
     # MODEL
     # =====================================================
 
-    "in_channels": 18,
+    "in_channels": 10,
     "out_channels": 1,
 
     "channel_head": [16, 8, 4],
@@ -108,7 +108,7 @@ model_config = {
 
     "test_exp": str(ROOT
                     / "runs"
-                    / "exp_010"),
+                    / "exp_012"),
 
     "ckpt_type": "best"
 }
