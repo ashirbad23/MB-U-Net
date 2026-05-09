@@ -49,19 +49,19 @@ model_config = {
     # BANDS
     # =====================================================
 
-    "bands_used": list(range(10)),
+    "bands_used": list(range(12)),
 
     # =====================================================
     # MODEL
     # =====================================================
 
-    "in_channels": 10,
+    "in_channels": 12,
     "out_channels": 1,
 
     "channel_head": 16,
     "num_levels": 4,
 
-    "dropout": 0.2,
+    "dropout": 0.15,
 
     "use_attention": False,
     "use_se": False,
@@ -108,7 +108,7 @@ model_config = {
 
     "test_exp": str(ROOT
                     / "runs"
-                    / "exp_009"),
+                    / "exp_010"),
 
     "ckpt_type": "best"
 }
