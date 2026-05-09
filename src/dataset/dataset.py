@@ -61,13 +61,36 @@ class GlacierDataset(Dataset):
         for img_path, mask_path in zip(self.band_files, self.mask_files):
             for y in range(0, H - patch_size + 1, stride):
                 for x in range(0, W - patch_size + 1, stride):
-                    self.samples.append((img_path, mask_path, x, y))
+
+                    # Use all 8 augmentations only for training
+                    if mode is not None and mode.lower() == "train":
+                        for aug_id in range(8):
+                            self.samples.append(
+                                (img_path, mask_path, x, y, aug_id)
+                            )
+                    else:
+                        # Validation / test / mode=None
+                        self.samples.append(
+                            (img_path, mask_path, x, y, 0)
+                        )
 
     def __len__(self):
         return len(self.samples)
 
+    def apply_offline_augmentation(self, img, mask, aug_id):
+        if aug_id >= 4:
+            img = torch.flip(img, dims=[2])  # horizontal flip
+            mask = torch.flip(mask, dims=[2])
+            aug_id -= 4
+
+        if aug_id > 0:
+            img = torch.rot90(img, k=aug_id, dims=[1, 2])
+            mask = torch.rot90(mask, k=aug_id, dims=[1, 2])
+
+        return img, mask
+
     def __getitem__(self, idx):
-        img_path, mask_path, x, y = self.samples[idx]
+        img_path, mask_path, x, y, aug_id = self.samples[idx]
 
         img = np.load(img_path)
         mask = np.load(mask_path)
@@ -78,8 +101,10 @@ class GlacierDataset(Dataset):
         img_patch = torch.from_numpy(img_patch).float()
         mask_patch = torch.from_numpy(mask_patch).float()
 
+        img_patch, mask_patch = self.apply_offline_augmentation(img_patch, mask_patch, aug_id)
+
         if self.transform:
-            img_patch, mask_patch = self.transform(img_patch, mask_patch, self.mean, self.std)
+            img_patch, mask_patch = self.transform(img_patch, mask_patch, self.mean, self.std, aug_id)
 
         img_patch = img_patch[self.bands_used] if self.bands_used is not None else img_patch
 
@@ -150,9 +175,10 @@ if __name__ == "__main__":
         path=DATASET,
         patch_size=128,
         overlap=0.5,
-        mode=None,
-        transform=None,
-        bands_used=None
+        mode="train",
+        transform=None,  # IMPORTANT → raw masks
+        bands_used=None,
+        mode_path="../../config/train_val_split.json"
     )
     print(len(raw_dataset))
 
