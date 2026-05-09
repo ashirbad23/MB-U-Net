@@ -12,7 +12,7 @@ CHECKPOINTS = ROOT / "model_checkpoints"
 CACHE = ROOT / "cache"
 
 model_config = {
-    "mode": "test",
+    "mode": "train",
     "seed": 42,
 
     # =====================================================
@@ -99,7 +99,7 @@ model_config = {
     # =====================================================
 
     "sampler_cache": str(
-        CACHE / "sampler_128_10bands.json"
+        CACHE / "sampler_128_10bands_new_aug.json"
     ),
 
     # =====================================================
