@@ -245,6 +245,7 @@ def train(config: dict):
         # batch_sampler=sampler,
         batch_size=config['batch_size'],
         num_workers=config['num_workers'],
+        shuffle=True,
         pin_memory=True,
     )
 
