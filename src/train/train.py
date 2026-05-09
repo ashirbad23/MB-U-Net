@@ -234,16 +234,16 @@ def train(config: dict):
         bands_used=config["bands_used"]
     )
 
-    sampler = GlacierBalancedSampler(
-        dataset=train_dataset,
-        batch_size=config['batch_size'],
-        cache_path=config['sampler_cache']
-    )
+    # sampler = GlacierBalancedSampler(
+    #     dataset=train_dataset,
+    #     batch_size=config['batch_size'],
+    #     cache_path=config['sampler_cache']
+    # )
 
     train_loader = DataLoader(
         train_dataset,
-        batch_sampler=sampler,
-        # batch_size=config['batch_size'],
+        # batch_sampler=sampler,
+        batch_size=config['batch_size'],
         num_workers=config['num_workers'],
         pin_memory=True,
     )
