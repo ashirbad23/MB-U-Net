@@ -49,16 +49,16 @@ model_config = {
     # BANDS
     # =====================================================
 
-    "bands_used": list(range(12)),
+    "bands_used": list(range(18)),
 
     # =====================================================
     # MODEL
     # =====================================================
 
-    "in_channels": 12,
+    "in_channels": 18,
     "out_channels": 1,
 
-    "channel_head": 16,
+    "channel_head": [16, 8, 4],
     "num_levels": 4,
 
     "dropout": 0.15,
@@ -82,7 +82,7 @@ model_config = {
     "learning_rate": 1e-4,
     "min_lr": 1e-5,
 
-    "patience": 8,
+    "patience": 10,
 
     "w_decay": 5e-5,
 
