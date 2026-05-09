@@ -174,10 +174,6 @@ class SUnet(nn.Module):
         return out, geo_weights
 
 
-import torch
-import torch.nn as nn
-
-
 class MultiBranchUNet(nn.Module):
     def __init__(self, ch_head, in_ch, out_ch, num_levels, dropout, bands_used=None, attn=False):
         super().__init__()
@@ -201,22 +197,65 @@ class MultiBranchUNet(nn.Module):
         assert self.sat_ch + self.dem_ch + self.curv_ch == len(self.bands_used)
 
         # ---- CHANNEL SIZES ----
+        # ---- PER-BRANCH HEAD CHANNELS ----
+        # ch_head can be:
+        #   int        -> same width for all branches
+        #   [sat, dem, curv]
+
+        if isinstance(ch_head, int):
+            self.sat_head = ch_head
+            self.dem_head = ch_head
+            self.curv_head = ch_head
+        else:
+            assert len(ch_head) == 3, "ch_head must be int or [sat_head, dem_head, curv_head]"
+
+            self.sat_head = ch_head[0]
+            self.dem_head = ch_head[1]
+            self.curv_head = ch_head[2]
+
+        # ---- DECODER CHANNEL SIZES (based on spectral width) ----
+        # The decoder and final fused representation use the spectral branch width
+        # as the reference scale.
         base_mult = [1, 2, 4, 8, 16, 32]
         ch_mult = base_mult[:num_levels]
-        chs = [ch_head * m for m in ch_mult]
+
+        chs = [self.sat_head * m for m in ch_mult]
 
         # ---- BUILD ENCODERS ONLY IF NEEDED ----
         if self.sat_ch > 0:
-            self.enc_sat = self._make_encoder(self.sat_ch, ch_head, chs, dropout, attn)
+            self.enc_sat = self._make_encoder(
+                self.sat_ch,
+                self.sat_head,
+                chs,
+                dropout,
+                attn
+            )
 
         if self.dem_ch > 0:
-            self.enc_dem = self._make_encoder(self.dem_ch, ch_head, chs, dropout, attn)
+            self.enc_dem = self._make_encoder(
+                self.dem_ch,
+                self.dem_head,
+                chs,
+                dropout,
+                attn
+            )
 
         if self.curv_ch > 0:
-            self.enc_curv = self._make_encoder(self.curv_ch, ch_head, chs, dropout, attn)
+            self.enc_curv = self._make_encoder(
+                self.curv_ch,
+                self.curv_head,
+                chs,
+                dropout,
+                attn
+            )
 
         # ---- COUNT ACTIVE BRANCHES ----
         self.num_branches = sum([self.sat_ch > 0, self.dem_ch > 0, self.curv_ch > 0])
+
+        # Small residual cross-modal information leak
+        self.leak_alpha = nn.Parameter(
+            torch.full((len(chs),), 0.1)
+        )
 
         # ---- BOTTLENECK ----
         self.bottleneck_fuse = nn.Conv2d(chs[-1] * self.num_branches, chs[-1], 1)
@@ -225,6 +264,16 @@ class MultiBranchUNet(nn.Module):
         # ---- SKIP FUSION ----
         self.skip_fuse = nn.ModuleList([
             nn.Conv2d(ch * self.num_branches, ch, kernel_size=1) for ch in chs
+        ])
+
+        # ---- EARLY CROSS-MODAL LEAK ----
+        # At each encoder level:
+        #   concatenate all branch skips
+        #   compress to common width
+        #   inject a small residual into every branch
+        self.leak_fuse = nn.ModuleList([
+            nn.Conv2d(ch * self.num_branches, ch, kernel_size=1)
+            for ch in chs
         ])
 
         # ---- DECODER ----
@@ -268,29 +317,67 @@ class MultiBranchUNet(nn.Module):
         return x, skips
 
     def forward(self, x):
-        features = []
-        skips_all = []
+        # =====================================================
+        # INITIALIZE BRANCH INPUTS
+        # =====================================================
 
-        # ---- SAT ----
+        branch_x = {}
+        branch_skips = {}
+
         if self.sat_ch > 0:
-            sat = x[:, self.sat_idx]
-            sat_x, sat_skips = self._forward_encoder(sat, self.enc_sat)
-            features.append(sat_x)
-            skips_all.append(sat_skips)
+            branch_x["sat"] = self.enc_sat["head"](x[:, self.sat_idx])
+            branch_skips["sat"] = []
 
-        # ---- DEM ----
         if self.dem_ch > 0:
-            dem = x[:, self.dem_idx]
-            dem_x, dem_skips = self._forward_encoder(dem, self.enc_dem)
-            features.append(dem_x)
-            skips_all.append(dem_skips)
+            branch_x["dem"] = self.enc_dem["head"](x[:, self.dem_idx])
+            branch_skips["dem"] = []
 
-        # ---- CURV ----
         if self.curv_ch > 0:
-            curv = x[:, self.curv_idx]
-            curv_x, curv_skips = self._forward_encoder(curv, self.enc_curv)
-            features.append(curv_x)
-            skips_all.append(curv_skips)
+            branch_x["curv"] = self.enc_curv["head"](x[:, self.curv_idx])
+            branch_skips["curv"] = []
+
+        active_names = list(branch_x.keys())
+
+        # =====================================================
+        # LEVEL-BY-LEVEL ENCODING WITH INFORMATION LEAK
+        # =====================================================
+
+        for level in range(len(self.skip_fuse)):
+
+            # ---------------------------------------------
+            # Run one down block for each active branch
+            # ---------------------------------------------
+            level_skips = []
+
+            for name in active_names:
+                encoder = getattr(self, f"enc_{name}")
+                skip, out = encoder["blocks"][level](branch_x[name])
+
+                branch_x[name] = out
+                branch_skips[name].append(skip)
+
+                level_skips.append(skip)
+
+            # ---------------------------------------------
+            # Cross-modal information leak
+            # ---------------------------------------------
+            if len(level_skips) > 1:
+
+                shared = torch.cat(level_skips, dim=1)
+                shared = self.leak_fuse[level](shared)
+
+                for name in active_names:
+                    branch_skips[name][-1] = (
+                            branch_skips[name][-1]
+                            + self.leak_alpha[level] * shared
+                    )
+
+        # =====================================================
+        # Collect final features and skips
+        # =====================================================
+
+        features = [branch_x[name] for name in active_names]
+        skips_all = [branch_skips[name] for name in active_names]
 
         # ---- BOTTLENECK ----
         x = torch.cat(features, dim=1)
@@ -319,9 +406,9 @@ class MultiBranchUNet(nn.Module):
 if __name__ == "__main__":
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    in_channels = 10
+    in_channels = 18
     out_channels = 1
-    ch_head = 16
+    ch_head = [16, 8, 8]
     num_levels = 4  # 🔥 THIS controls depth now (But don't increase the depth beyond 5 for 64x64 input)
     dropout = 0.1
 
@@ -337,3 +424,4 @@ if __name__ == "__main__":
     H, W = 128, 128
 
     summary(model, (in_channels, H, W), batch_size=16)
+    print(model.leak_alpha.data)
