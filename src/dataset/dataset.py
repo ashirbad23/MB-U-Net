@@ -104,7 +104,7 @@ class GlacierDataset(Dataset):
         img_patch, mask_patch = self.apply_offline_augmentation(img_patch, mask_patch, aug_id)
 
         if self.transform:
-            img_patch, mask_patch = self.transform(img_patch, mask_patch, self.mean, self.std, aug_id)
+            img_patch, mask_patch = self.transform(img_patch, mask_patch, self.mean, self.std)
 
         img_patch = img_patch[self.bands_used] if self.bands_used is not None else img_patch
 
