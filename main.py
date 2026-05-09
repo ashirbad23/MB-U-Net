@@ -12,7 +12,7 @@ CHECKPOINTS = ROOT / "model_checkpoints"
 CACHE = ROOT / "cache"
 
 model_config = {
-    "mode": "test",
+    "mode": "train",
     "seed": 42,
 
     # =====================================================
@@ -49,13 +49,13 @@ model_config = {
     # BANDS
     # =====================================================
 
-    "bands_used": list(range(10)),
+    "bands_used": list(range(18)),
 
     # =====================================================
     # MODEL
     # =====================================================
 
-    "in_channels": 10,
+    "in_channels": 18,
     "out_channels": 1,
 
     "channel_head": [16, 8, 4],
