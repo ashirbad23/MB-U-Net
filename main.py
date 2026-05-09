@@ -108,7 +108,8 @@ model_config = {
 
     "test_exp": str(ROOT
                     / "runs"
-                    / "exp_012"),
+                    / "exp_013"),
+    "test_threshold": 0.30,
 
     "ckpt_type": "best"
 }

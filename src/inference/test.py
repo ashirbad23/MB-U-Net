@@ -16,7 +16,7 @@ from src.model.StandardUNet import MultiBranchUNet
 
 from utils.transform import GlacierTransform
 from utils.stitch import PatchStitcher
-from utils.metrics import compute_metrics_direct
+from utils.metrics import compute_metrics_direct, find_best_threshold
 
 
 # =====================================================
@@ -125,7 +125,10 @@ def test(config):
         map_location=device
     )
 
-    threshold = ckpt["extra"]["best_threshold"]
+    threshold = config.get(
+        "test_threshold",
+        ckpt["extra"]["best_threshold"]
+    )
 
     logger.info(
         f"Best Threshold: {threshold:.3f}"
