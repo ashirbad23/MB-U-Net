@@ -19,8 +19,8 @@ STRIDE = 512
 
 def load_data(data_dir):
 
-    bands_dir = data_dir / "images_test"
-    masks_dir = data_dir / "masks_test"
+    bands_dir = data_dir / "images"
+    masks_dir = data_dir / "masks"
 
     band_files = glob.glob(str(bands_dir / "*.tif"))
     mask_files = glob.glob(str(masks_dir / "*.tif"))
@@ -164,8 +164,8 @@ def extract_patches(img_mosaic, mask_mosaic, terrain_features):
         M
     ) = terrain_features
 
-    os.makedirs("../dataset/images_test", exist_ok=True)
-    os.makedirs("../dataset/masks_test", exist_ok=True)
+    os.makedirs("../dataset/images", exist_ok=True)
+    os.makedirs("../dataset/masks", exist_ok=True)
 
     _, H_img, W_img = img_mosaic.shape
 
@@ -201,8 +201,8 @@ def extract_patches(img_mosaic, mask_mosaic, terrain_features):
             r = y // PATCH
             c = x // PATCH
 
-            np.save(f"../dataset/images_test/img_r{r}_c{c}.npy", full_patch.astype(np.float32))
-            np.save(f"../dataset/masks_test/mask_r{r}_c{c}.npy", mask_patch.astype(np.uint8))
+            np.save(f"../dataset/images/img_r{r}_c{c}.npy", full_patch.astype(np.float32))
+            np.save(f"../dataset/masks/mask_r{r}_c{c}.npy", mask_patch.astype(np.uint8))
 
             counter += 1
 
@@ -224,12 +224,12 @@ def main():
     terrain_features = compute_terrain_features(dem, transform, crs)
 
     # --- Compute normalization stats ---
-    # mean, std = compute_stats_streaming(img_mosaic, terrain_features)
+    mean, std = compute_stats_streaming(img_mosaic, terrain_features)
 
     os.makedirs("../dataset", exist_ok=True)
 
-    # np.save("../dataset/mean_test.npy", mean)
-    # np.save("../dataset/std_test.npy", std)
+    np.save("../dataset/mean.npy", mean)
+    np.save("../dataset/std.npy", std)
 
     print("Saved mean/std")
 

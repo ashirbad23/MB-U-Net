@@ -171,32 +171,32 @@ if __name__ == "__main__":
     # =========================
     # RAW DATA ANALYSIS
     # =========================
-    raw_dataset = GlacierDataset(
-        path=DATASET,
-        patch_size=128,
-        overlap=0.5,
-        mode="train",
-        transform=None,  # IMPORTANT → raw masks
-        bands_used=None,
-        mode_path="../../config/train_val_split.json"
-    )
-    print(len(raw_dataset))
-
-    analyze_dataset(raw_dataset, "RAW DATA")
-
-    # =========================
-    # AFTER TRANSFORM ANALYSIS
-    # =========================
-    transformed_dataset = GlacierDataset(
-        path=DATASET,
-        patch_size=512,
-        overlap=1,
-        mode=None,
-        transform=GlacierTransform(),
-        bands_used=None
-    )
-
-    analyze_dataset(transformed_dataset, "AFTER TRANSFORM", extreme_thresh=20)
+    # raw_dataset = GlacierDataset(
+    #     path=DATASET,
+    #     patch_size=128,
+    #     overlap=0.5,
+    #     mode="train",
+    #     transform=None,  # IMPORTANT → raw masks
+    #     bands_used=None,
+    #     mode_path="../../config/train_val_split.json"
+    # )
+    # print(len(raw_dataset))
+    #
+    # analyze_dataset(raw_dataset, "RAW DATA")
+    #
+    # # =========================
+    # # AFTER TRANSFORM ANALYSIS
+    # # =========================
+    # transformed_dataset = GlacierDataset(
+    #     path=DATASET,
+    #     patch_size=512,
+    #     overlap=1,
+    #     mode=None,
+    #     transform=GlacierTransform(),
+    #     bands_used=None
+    # )
+    #
+    # analyze_dataset(transformed_dataset, "AFTER TRANSFORM", extreme_thresh=20)
 
     # =========================
     # CLASS IMBALANCE (SEPARATE PASS)
@@ -208,9 +208,10 @@ if __name__ == "__main__":
         path=DATASET,
         patch_size=512,
         overlap=1,
-        mode=None,
+        mode="val",
         transform=None,  # IMPORTANT → raw masks
-        bands_used=None
+        bands_used=None,
+        mode_path="../../config/train_val_split.json"
     )
 
     total_pixels = 0
