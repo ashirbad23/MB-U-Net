@@ -20,7 +20,7 @@ model_config = {
     # =====================================================
 
     "dataset": str(ROOT / "dataset"),
-    "split_path": str(ROOT / "config" / "train_val_split.json"),
+    "split_path": str(ROOT / "config" / "train_val_test_split.json"),
     "run_base_dir": str(ROOT / "runs"),
 
     # =====================================================
@@ -108,8 +108,8 @@ model_config = {
 
     "test_exp": str(ROOT
                     / "runs"
-                    / "exp_001"),
-    "test_threshold": 0.60,
+                    / "exp_002"),
+    # "test_threshold": 0.60,
 
     "ckpt_type": "best"
 }
