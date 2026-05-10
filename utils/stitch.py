@@ -118,7 +118,7 @@ class PatchStitcher:
 
         probs = self.get_full_probs()
 
-        mask = (probs > threshold).astype(np.uint8)
+        mask = (probs > threshold).astype(np.float16)
 
         return mask
 
