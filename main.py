@@ -14,7 +14,7 @@ CHECKPOINTS = ROOT / "model_checkpoints"
 CACHE = ROOT / "cache"
 
 model_config = {
-    "mode": "visualize",
+    "mode": "train",
     "seed": 42,
 
     # =====================================================
