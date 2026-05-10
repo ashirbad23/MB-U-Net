@@ -6,6 +6,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 import torch
+import pandas as pd
 
 from torch.cuda.amp import autocast
 from torch.utils.data import DataLoader
@@ -50,22 +51,25 @@ def setup_logger(exp_dir):
     )
 
     logger = logging.getLogger("test_logger")
-
     logger.setLevel(logging.INFO)
 
-    if not logger.handlers:
-        fh = logging.FileHandler(log_file)
-        ch = logging.StreamHandler()
+    # Remove old handlers if they exist
+    if logger.hasHandlers():
+        logger.handlers.clear()
 
-        formatter = logging.Formatter(
-            "%(asctime)s - %(message)s"
-        )
+    # Always create fresh handlers
+    fh = logging.FileHandler(log_file)
+    ch = logging.StreamHandler()
 
-        fh.setFormatter(formatter)
-        ch.setFormatter(formatter)
+    formatter = logging.Formatter(
+        "%(asctime)s - %(message)s"
+    )
 
-        logger.addHandler(fh)
-        logger.addHandler(ch)
+    fh.setFormatter(formatter)
+    ch.setFormatter(formatter)
+
+    logger.addHandler(fh)
+    logger.addHandler(ch)
 
     return logger
 
@@ -303,6 +307,8 @@ def test(config):
         FP_total = torch.tensor(0.0)
         FN_total = torch.tensor(0.0)
 
+        rows = []
+
         for image_id in stitchers.keys():
 
             full_probs = stitchers[image_id].get_full_probs()
@@ -336,6 +342,15 @@ def test(config):
                 TP, TN, FP, FN
             )
 
+            rows.append({
+                "image_id": image_id,
+                "IoU": metrics["IoU"],
+                "Precision": metrics["Precision"],
+                "Recall": metrics["Recall"],
+                "F1": metrics["F1"],
+                "MCC": metrics["MCC"]
+            })
+
             logger.info(
                 f"{image_id} | "
                 f"MCC: {metrics['MCC']:.4f} | "
@@ -359,6 +374,22 @@ def test(config):
                 os.path.join(gt_dir, f"gt_{image_id}.png"),
                 gt_mask * 255
             )
+
+        # =================================================
+        # SAVE PER-IMAGE METRICS
+        # =================================================
+
+        df = pd.DataFrame(rows)
+        df = df.sort_values("MCC", ascending=False).reset_index(drop=True)
+
+        csv_path = os.path.join(
+            save_dir,
+            "all_image_metrics.csv"
+        )
+
+        df.to_csv(csv_path, index=False)
+
+        logger.info(f"Saved per-image metrics to {csv_path}")
 
         # =================================================
         # FINAL RESULTS

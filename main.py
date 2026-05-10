@@ -2,6 +2,7 @@ import torch
 from pathlib import Path
 from src.train.train import train
 from src.inference.test import test
+from src.explain.explain import explain
 import os
 
 ROOT = Path(__file__).resolve().parent
@@ -12,7 +13,7 @@ CHECKPOINTS = ROOT / "model_checkpoints"
 CACHE = ROOT / "cache"
 
 model_config = {
-    "mode": "train",
+    "mode": "explain",
     "seed": 42,
 
     # =====================================================
@@ -111,7 +112,27 @@ model_config = {
                     / "exp_002"),
     # "test_threshold": 0.60,
 
-    "ckpt_type": "best"
+    "ckpt_type": "best",
+    # =====================================================
+    # EXPLAINABILITY
+    # =====================================================
+
+    "explain_exp": str(
+        ROOT
+        / "runs"
+        / "exp_002"  # change to your target experiment
+    ),
+
+    # Which dataset to explain:
+    # "internal" -> uses test_results_internal
+    # "external" -> uses test_results_external
+    "explain_dataset": "internal",
+
+    # Number of best images (sorted by MCC)
+    "top_k": 5,
+
+    # Integrated Gradients settings
+    "ig_steps": 32,
 }
 
 if __name__ == "__main__":
@@ -119,3 +140,5 @@ if __name__ == "__main__":
         train(model_config)
     elif model_config["mode"] == "test":
         test(model_config)
+    elif model_config["mode"] == "explain":
+        explain(model_config)
