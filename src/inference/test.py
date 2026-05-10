@@ -16,7 +16,10 @@ from src.model.StandardUNet import MultiBranchUNet
 
 from utils.transform import GlacierTransform
 from utils.stitch import PatchStitcher
-from utils.metrics import compute_metrics_direct, find_best_threshold
+from utils.metrics import (
+    confusion_matrix,
+    compute_metrics_from_cm
+)
 
 
 # =====================================================
@@ -24,7 +27,6 @@ from utils.metrics import compute_metrics_direct, find_best_threshold
 # =====================================================
 
 def get_latest_experiment(base_dir):
-
     if not os.path.exists(base_dir):
         return None
 
@@ -42,7 +44,6 @@ def get_latest_experiment(base_dir):
 
 
 def setup_logger(exp_dir):
-
     log_file = os.path.join(
         exp_dir,
         "test_metrics.log"
@@ -53,7 +54,6 @@ def setup_logger(exp_dir):
     logger.setLevel(logging.INFO)
 
     if not logger.handlers:
-
         fh = logging.FileHandler(log_file)
         ch = logging.StreamHandler()
 
@@ -76,7 +76,6 @@ def setup_logger(exp_dir):
 
 @torch.no_grad()
 def test(config):
-
     device = torch.device(config["device"])
 
     # =================================================
@@ -84,10 +83,7 @@ def test(config):
     # =================================================
 
     exp_dir = (
-            config.get("test_exp")
-            or get_latest_experiment(
-        config["run_base_dir"]
-    )
+            config.get("test_exp") or get_latest_experiment(config["run_base_dir"])
     )
 
     if exp_dir is None:
@@ -134,33 +130,40 @@ def test(config):
         f"Best Threshold: {threshold:.3f}"
     )
 
-    # =================================================
-    # DATA
-    # =================================================
+    # =====================================================
+    # DATASETS TO EVALUATE
+    # =====================================================
 
     transform = GlacierTransform(
         normalize=True,
-        use_rotation=False
+        use_rotation=False,
+        use_radiometric=False
     )
 
-    dataset = GlacierTestDataset(
-        path=Path(config["dataset"]),
-        patch_size=config["patch_size"],
-        bands_used=config["bands_used"],
-        transform=transform
-    )
-
-    loader = DataLoader(
-        dataset,
-        batch_size=config["batch_size"],
-        shuffle=False,
-        num_workers=config["num_workers"],
-        pin_memory=True
-    )
-
-    logger.info(
-        f"Total patches: {len(dataset)}"
-    )
+    test_configs = [
+        {
+            "name": "external",
+            "dataset": GlacierTestDataset(
+                path=Path(config["dataset"]),
+                patch_size=config["patch_size"],
+                bands_used=config["bands_used"],
+                transform=transform
+            ),
+            "results_folder": "test_results_external"
+        },
+        {
+            "name": "internal",
+            "dataset": GlacierTestDataset(
+                path=Path(config["dataset"]),
+                patch_size=config["patch_size"],
+                bands_used=config["bands_used"],
+                transform=transform,
+                mode="test",
+                mode_path=config["split_path"]
+            ),
+            "results_folder": "test_results_internal"
+        }
+    ]
 
     # =================================================
     # MODEL
@@ -184,268 +187,210 @@ def test(config):
 
     logger.info("Model loaded successfully")
 
-    # =================================================
-    # SAVE DIRS
-    # =================================================
+    # =====================================================
+    # EVALUATE BOTH DATASETS
+    # =====================================================
 
-    save_dir = os.path.join(
-        exp_dir,
-        "test_results"
-    )
+    for test_cfg in test_configs:
 
-    pred_dir = os.path.join(
-        save_dir,
-        "preds"
-    )
+        dataset = test_cfg["dataset"]
+        results_folder = test_cfg["results_folder"]
+        test_name = test_cfg["name"]
 
-    prob_dir = os.path.join(
-        save_dir,
-        "probs"
-    )
+        logger.info("=" * 60)
+        logger.info(f"Running {test_name.upper()} TEST")
+        logger.info("=" * 60)
 
-    gt_dir = os.path.join(
-        save_dir,
-        "gt"
-    )
+        loader = DataLoader(
+            dataset,
+            batch_size=config["batch_size"],
+            shuffle=False,
+            num_workers=config["num_workers"],
+            pin_memory=True
+        )
 
-    os.makedirs(pred_dir, exist_ok=True)
-    os.makedirs(prob_dir, exist_ok=True)
-    os.makedirs(gt_dir, exist_ok=True)
+        logger.info(f"Total patches: {len(dataset)}")
 
-    # =================================================
-    # STITCHERS
-    # =================================================
+        # =================================================
+        # SAVE DIRS
+        # =================================================
 
-    stitchers = {}
-    gt_maps = {}
+        save_dir = os.path.join(exp_dir, results_folder)
 
-    # =================================================
-    # INFERENCE
-    # =================================================
+        pred_dir = os.path.join(save_dir, "preds")
+        prob_dir = os.path.join(save_dir, "probs")
+        gt_dir = os.path.join(save_dir, "gt")
 
-    logger.info("Starting inference...")
+        os.makedirs(pred_dir, exist_ok=True)
+        os.makedirs(prob_dir, exist_ok=True)
+        os.makedirs(gt_dir, exist_ok=True)
 
-    for batch in tqdm(
-            loader,
-            dynamic_ncols=True
-    ):
+        # =================================================
+        # STITCHERS
+        # =================================================
 
-        images = batch["image"].to(device)
+        stitchers = {}
+        gt_maps = {}
 
-        masks = batch["mask"]
+        # =================================================
+        # INFERENCE
+        # =================================================
 
-        xs = batch["x"]
-        ys = batch["y"]
+        logger.info("Starting inference...")
 
-        image_ids = batch["image_id"]
+        for batch in tqdm(loader, dynamic_ncols=True):
 
-        orig_hs = batch["orig_h"]
-        orig_ws = batch["orig_w"]
+            images = batch["image"].to(device)
+            masks = batch["mask"]
 
-        # ---------------------------------------------
-        # FORWARD
-        # ---------------------------------------------
+            xs = batch["x"]
+            ys = batch["y"]
 
-        with autocast(
-                enabled=(device.type == "cuda")
-        ):
+            image_ids = batch["image_id"]
+            orig_hs = batch["orig_h"]
+            orig_ws = batch["orig_w"]
 
-            preds, _ = model(images)
+            with autocast(enabled=(device.type == "cuda")):
+                preds, _ = model(images)
+                probs = torch.sigmoid(preds)
 
-            probs = torch.sigmoid(preds)
+            probs = probs.cpu()
 
-        probs = probs.cpu()
+            B = probs.shape[0]
 
-        # =============================================
-        # PATCH RECONSTRUCTION
-        # =============================================
+            for i in range(B):
+                image_id = image_ids[i]
 
-        B = probs.shape[0]
+                x = int(xs[i])
+                y = int(ys[i])
 
-        for i in range(B):
+                orig_h = int(orig_hs[i])
+                orig_w = int(orig_ws[i])
 
-            image_id = image_ids[i]
+                if image_id not in stitchers:
+                    stitchers[image_id] = PatchStitcher(
+                        full_h=orig_h,
+                        full_w=orig_w
+                    )
 
-            x = int(xs[i])
-            y = int(ys[i])
+                    gt_maps[image_id] = np.zeros(
+                        (orig_h, orig_w),
+                        dtype=np.uint8
+                    )
 
-            orig_h = int(orig_hs[i])
-            orig_w = int(orig_ws[i])
-
-            # -----------------------------------------
-            # CREATE STITCHER
-            # -----------------------------------------
-
-            if image_id not in stitchers:
-
-                stitchers[image_id] = PatchStitcher(
-                    full_h=orig_h,
-                    full_w=orig_w
+                stitchers[image_id].add_patch(
+                    probs[i],
+                    x=x,
+                    y=y
                 )
 
-                gt_maps[image_id] = np.zeros(
-                    (orig_h, orig_w),
-                    dtype=np.uint8
-                )
+                gt_patch = masks[i].squeeze(0).numpy()
+                h, w = gt_patch.shape
 
-            # -----------------------------------------
-            # ADD PATCH
-            # -----------------------------------------
+                gt_maps[image_id][
+                y:y + h,
+                x:x + w
+                ] = gt_patch
 
-            stitchers[image_id].add_patch(
-                probs[i],
-                x=x,
-                y=y
+        # =================================================
+        # FINAL RECONSTRUCTION + METRICS
+        # =================================================
+
+        logger.info("Saving outputs...")
+
+        TP_total = torch.tensor(0.0)
+        TN_total = torch.tensor(0.0)
+        FP_total = torch.tensor(0.0)
+        FN_total = torch.tensor(0.0)
+
+        for image_id in stitchers.keys():
+
+            full_probs = stitchers[image_id].get_full_probs()
+
+            pred_mask = stitchers[image_id].get_binary_mask(
+                threshold=threshold
             )
 
-            # -----------------------------------------
-            # GT PATCH
-            # -----------------------------------------
+            gt_mask = gt_maps[image_id]
 
-            gt_patch = (
-                masks[i]
-                .squeeze(0)
-                .numpy()
+            pred_tensor = torch.from_numpy(
+                pred_mask
+            ).unsqueeze(0).unsqueeze(0).float()
+
+            gt_tensor = torch.from_numpy(
+                gt_mask
+            ).unsqueeze(0).unsqueeze(0).float()
+
+            TP, TN, FP, FN = confusion_matrix(
+                pred_tensor,
+                gt_tensor
             )
 
-            h, w = gt_patch.shape
+            TP_total += TP
+            TN_total += TN
+            FP_total += FP
+            FN_total += FN
 
-            gt_maps[image_id][
-                y:y+h,
-                x:x+w
-            ] = gt_patch
+            # Keep per-image logging
+            metrics = compute_metrics_from_cm(
+                TP, TN, FP, FN
+            )
 
-    # =================================================
-    # FINAL RECONSTRUCTION
-    # =================================================
+            logger.info(
+                f"{image_id} | "
+                f"MCC: {metrics['MCC']:.4f} | "
+                f"F1: {metrics['F1']:.4f}"
+            )
 
-    logger.info("Saving outputs...")
+            # Save probability map
+            np.save(
+                os.path.join(prob_dir, f"prob_{image_id}.npy"),
+                full_probs.astype(np.float32)
+            )
 
-    total_metrics = {
-        "IoU": [],
-        "Precision": [],
-        "Recall": [],
-        "F1": [],
-        "MCC": []
-    }
+            # Save prediction mask
+            cv2.imwrite(
+                os.path.join(pred_dir, f"pred_{image_id}.png"),
+                pred_mask * 255
+            )
 
-    for image_id in stitchers.keys():
+            # Save ground truth
+            cv2.imwrite(
+                os.path.join(gt_dir, f"gt_{image_id}.png"),
+                gt_mask * 255
+            )
 
-        # ---------------------------------------------
-        # FULL PROBABILITY MAP
-        # ---------------------------------------------
+        # =================================================
+        # FINAL RESULTS
+        # =================================================
 
-        full_probs = stitchers[
-            image_id
-        ].get_full_probs()
+        logger.info(f"========== FINAL RESULTS ({test_name.upper()}) ==========")
 
-        # ---------------------------------------------
-        # FINAL BINARY MASK
-        # ---------------------------------------------
+        final_results = {
+            "threshold": float(threshold)
+        }
 
-        pred_mask = stitchers[
-            image_id
-        ].get_binary_mask(
-            threshold=threshold
+        global_metrics = compute_metrics_from_cm(
+            TP_total,
+            TN_total,
+            FP_total,
+            FN_total
         )
 
-        gt_mask = gt_maps[image_id]
+        for k, v in global_metrics.items():
+            final_results[k] = float(v)
+            logger.info(f"{k}: {v:.4f}")
 
-        # ---------------------------------------------
-        # METRICS
-        # ---------------------------------------------
+        # =================================================
+        # SAVE JSON
+        # =================================================
 
-        pred_tensor = torch.from_numpy(
-            pred_mask
-        ).unsqueeze(0).unsqueeze(0).float()
-
-        gt_tensor = torch.from_numpy(
-            gt_mask
-        ).unsqueeze(0).unsqueeze(0).float()
-
-        metrics = compute_metrics_direct(
-            pred_tensor,
-            gt_tensor
+        log_path = os.path.join(
+            save_dir,
+            "test_log.json"
         )
 
-        for k in total_metrics:
-            total_metrics[k].append(metrics[k])
+        with open(log_path, "w") as f:
+            json.dump(final_results, f, indent=4)
 
-        logger.info(
-            f"{image_id} | "
-            f"MCC: {metrics['MCC']:.4f} | "
-            f"F1: {metrics['F1']:.4f}"
-        )
-
-        # ---------------------------------------------
-        # SAVE PROBS
-        # ---------------------------------------------
-
-        np.save(
-            os.path.join(
-                prob_dir,
-                f"prob_{image_id}.npy"
-            ),
-            full_probs.astype(np.float32)
-        )
-
-        # ---------------------------------------------
-        # SAVE PRED
-        # ---------------------------------------------
-
-        cv2.imwrite(
-            os.path.join(
-                pred_dir,
-                f"pred_{image_id}.png"
-            ),
-            pred_mask * 255
-        )
-
-        # ---------------------------------------------
-        # SAVE GT
-        # ---------------------------------------------
-
-        cv2.imwrite(
-            os.path.join(
-                gt_dir,
-                f"gt_{image_id}.png"
-            ),
-            gt_mask * 255
-        )
-
-    # =================================================
-    # FINAL METRICS
-    # =================================================
-
-    logger.info("========== FINAL RESULTS ==========")
-
-    final_results = {}
-
-    for k in total_metrics:
-
-        avg = np.mean(total_metrics[k])
-
-        final_results[k] = float(avg)
-
-        logger.info(f"{k}: {avg:.4f}")
-
-    # =================================================
-    # SAVE JSON
-    # =================================================
-
-    log_path = os.path.join(
-        exp_dir,
-        "test_log.json"
-    )
-
-    with open(log_path, "w") as f:
-
-        json.dump(
-            final_results,
-            f,
-            indent=4
-        )
-
-    logger.info(
-        f"Saved test log to {log_path}"
-    )
+        logger.info(f"Saved test log to {log_path}")
