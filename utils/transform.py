@@ -3,12 +3,13 @@ import random
 
 
 class GlacierTransform:
-    def __init__(self, normalize=True, use_rotation=True):
+    def __init__(self,
+                 normalize=True,
+                 use_rotation=True,
+                 use_radiometric=True):
         self.normalize = normalize
-
         self.use_rotation = use_rotation
-
-        # channels to skip (sin/cos)
+        self.use_radiometric = use_radiometric
         self.skip_channels = [8, 9]
 
     def normalize_img_mask(self, img, mean, std):
@@ -48,6 +49,30 @@ class GlacierTransform:
 
         return img, mask
 
+    def radiometric_augment(self, img):
+        """
+        Apply small physically plausible intensity perturbations
+        to all channels except aspect sin/cos.
+        """
+
+        # Global brightness scaling (±10%)
+        scale = random.uniform(0.9, 1.1)
+
+        # Global additive shift (±0.05 normalized units)
+        shift = random.uniform(-0.05, 0.05)
+
+        for c in range(img.shape[0]):
+            if c in self.skip_channels:
+                continue
+
+            img[c] = img[c] * scale + shift
+
+            # Small Gaussian noise
+            noise = torch.randn_like(img[c]) * 0.01
+            img[c] = img[c] + noise
+
+        return img
+
     def __call__(self, img, mask, mean, std):
         """
         mean, std: numpy arrays of shape (16,)
@@ -68,5 +93,8 @@ class GlacierTransform:
         # Augment
         if self.use_rotation:
             img, mask = self.rotate(img, mask)
+
+        if self.use_radiometric:
+            img = self.radiometric_augment(img)
 
         return img, mask

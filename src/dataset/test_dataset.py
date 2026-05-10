@@ -209,36 +209,78 @@ class GlacierTestDataset(Dataset):
 if __name__ == "__main__":
 
     from pathlib import Path
+    import numpy as np
+    from tqdm import tqdm
 
     ROOT = Path(__file__).resolve().parent.parent.parent
 
     DATASET = ROOT / "dataset"
 
+    def analyze_dataset(dataset, title, extreme_thresh=None):
+        print(f"\n===== {title} =====")
+
+        channel_vals = None
+        extreme_samples = []
+
+        for i in tqdm(range(len(dataset))):
+            img = dataset[i]["image"]
+            img = img.numpy()
+
+            if channel_vals is None:
+                channel_vals = [[] for _ in range(img.shape[0])]
+
+            # collect per-channel values
+            for c in range(img.shape[0]):
+                channel_vals[c].append(img[c].reshape(-1))
+
+            # optional extreme detection
+            if extreme_thresh is not None:
+                max_val = np.abs(img).max()
+                if max_val > extreme_thresh:
+                    extreme_samples.append((i, max_val))
+
+        # concat all values
+        for c in range(len(channel_vals)):
+            channel_vals[c] = np.concatenate(channel_vals[c])
+
+        # print stats
+        for c, vals in enumerate(channel_vals):
+            p = np.percentile(vals, [0, 1, 50, 99, 99.9, 100])
+
+            print(f"\nChannel {c}")
+            print("min      :", p[0])
+            print("1%       :", p[1])
+            print("median   :", p[2])
+            print("99%      :", p[3])
+            print("99.9%    :", p[4])
+            print("max      :", p[5])
+
+        # extreme summary
+        if extreme_thresh is not None:
+            print("\nExtreme samples:", len(extreme_samples))
+            if extreme_samples:
+                print("Top 5 extremes:")
+                print(sorted(extreme_samples, key=lambda x: -x[1])[:5])
+
+
     dataset = GlacierTestDataset(
         path=DATASET,
-        patch_size=128,
-        transform=GlacierTransform(
-            normalize=True,
-            use_rotation=False
-        ),
-        bands_used=list(range(10))
+        patch_size=512,
+        transform=None,
+        bands_used=None
     )
 
-    print("Total inference patches:", len(dataset))
+    analyze_dataset(dataset, "TEST DATA RAW")
 
-    sample = dataset[0]
+    trans_dataset = GlacierTestDataset(
+        path=DATASET,
+        patch_size=512,
+        transform=GlacierTransform(
+            normalize=True,
+            use_rotation=False,
+            use_radiometric=False
+        ),
+        bands_used=None
+    )
 
-    print("\nSample keys:")
-    print(sample.keys())
-
-    print("\nImage shape:")
-    print(sample["image"].shape)
-
-    print("\nMask shape:")
-    print(sample["mask"].shape)
-
-    print("\nCoords:")
-    print(sample["x"], sample["y"])
-
-    print("\nImage ID:")
-    print(sample["image_id"])
+    analyze_dataset(trans_dataset, "TEST DATA Normalized")

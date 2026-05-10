@@ -229,7 +229,7 @@ def train(config: dict):
         path=Path(config['dataset']),
         patch_size=config["patch_size"],
         overlap=config["overlap_val"],
-        transform=GlacierTransform(use_rotation=False),
+        transform=GlacierTransform(use_rotation=False, use_radiometric=False),
         mode='val',
         mode_path=Path(config['split_path']),
         bands_used=config["bands_used"]
