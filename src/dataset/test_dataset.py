@@ -4,6 +4,7 @@ import torch
 from torch.utils.data import Dataset
 import numpy as np
 from pathlib import Path
+import json
 import glob
 
 from utils.transform import GlacierTransform
@@ -33,7 +34,9 @@ class GlacierTestDataset(Dataset):
             path: Path,
             transform=None,
             patch_size=128,
-            bands_used=None
+            bands_used=None,
+            mode=None,
+            mode_path=None
     ):
         super().__init__()
 
@@ -42,16 +45,6 @@ class GlacierTestDataset(Dataset):
         self.transform = transform
         self.patch_size = patch_size
         self.bands_used = bands_used
-
-        # =========================
-        # Paths
-        # =========================
-
-        self.image_path = self.path / "images_test"
-        self.mask_path = self.path / "masks_test"
-
-        assert self.image_path.exists(), "Images folder missing"
-        assert self.mask_path.exists(), "Masks folder missing"
 
         # =========================
         # Mean / Std
@@ -64,15 +57,69 @@ class GlacierTestDataset(Dataset):
         # File collection
         # =========================
 
-        self.image_files = sorted(
-            glob.glob(str(self.image_path / "*.npy"))
-        )
+        if mode is None:
+            # ---------------------------------
+            # Default: external held-out AOI
+            # dataset/images_test
+            # dataset/masks_test
+            # ---------------------------------
+            self.image_path = self.path / "images_test"
+            self.mask_path = self.path / "masks_test"
 
-        self.mask_files = sorted(
-            glob.glob(str(self.mask_path / "*.npy"))
-        )
+            assert self.image_path.exists(), "Images folder missing"
+            assert self.mask_path.exists(), "Masks folder missing"
+
+            self.image_files = sorted(
+                glob.glob(str(self.image_path / "*.npy"))
+            )
+
+            self.mask_files = sorted(
+                glob.glob(str(self.mask_path / "*.npy"))
+            )
+
+        else:
+            # ---------------------------------
+            # Internal split:
+            # dataset/images
+            # dataset/masks
+            # Uses split JSON
+            # ---------------------------------
+            assert mode_path is not None, "mode_path must be provided"
+
+            self.image_path = self.path / "images"
+            self.mask_path = self.path / "masks"
+
+            assert self.image_path.exists(), "Images folder missing"
+            assert self.mask_path.exists(), "Masks folder missing"
+
+            with open(mode_path, "r") as f:
+                split = json.load(f)
+
+            if mode.lower() == "train":
+                ids = split["train"]
+            elif mode.lower() == "val":
+                ids = split["val"]
+            elif mode.lower() == "test":
+                ids = split["test"]
+            else:
+                raise ValueError("mode must be train, val, test, or None")
+
+            self.image_files = sorted(
+                [self.image_path / f"img_{i}.npy" for i in ids]
+            )
+
+            self.mask_files = sorted(
+                [self.mask_path / f"mask_{i}.npy" for i in ids]
+            )
+
+        # =========================
+        # Sanity checks
+        # =========================
 
         assert len(self.image_files) == len(self.mask_files)
+
+        for img_file, mask_file in zip(self.image_files, self.mask_files):
+            assert Path(img_file).name.replace("img", "mask") == Path(mask_file).name
 
         # =========================
         # Patch indexing
@@ -215,6 +262,7 @@ if __name__ == "__main__":
     ROOT = Path(__file__).resolve().parent.parent.parent
 
     DATASET = ROOT / "dataset"
+    MODE_PATH = ROOT / "config/train_val_test_split.json"
 
     def analyze_dataset(dataset, title, extreme_thresh=None):
         print(f"\n===== {title} =====")
@@ -263,14 +311,14 @@ if __name__ == "__main__":
                 print(sorted(extreme_samples, key=lambda x: -x[1])[:5])
 
 
-    dataset = GlacierTestDataset(
-        path=DATASET,
-        patch_size=512,
-        transform=None,
-        bands_used=None
-    )
-
-    analyze_dataset(dataset, "TEST DATA RAW")
+    # dataset = GlacierTestDataset(
+    #     path=DATASET,
+    #     patch_size=512,
+    #     transform=None,
+    #     bands_used=None
+    # )
+    #
+    # analyze_dataset(dataset, "TEST DATA RAW")
 
     trans_dataset = GlacierTestDataset(
         path=DATASET,
@@ -280,7 +328,10 @@ if __name__ == "__main__":
             use_rotation=False,
             use_radiometric=False
         ),
-        bands_used=None
+        bands_used=None,
+        mode=None,
+        mode_path=MODE_PATH
     )
+    print(len(trans_dataset))
 
-    analyze_dataset(trans_dataset, "TEST DATA Normalized")
+    # analyze_dataset(trans_dataset, "TEST DATA Normalized")
