@@ -3,6 +3,7 @@ from pathlib import Path
 from src.train.train import train
 from src.inference.test import test
 from src.explain.explain import explain
+from src.visualize.visualize import visualize
 import os
 
 ROOT = Path(__file__).resolve().parent
@@ -13,7 +14,7 @@ CHECKPOINTS = ROOT / "model_checkpoints"
 CACHE = ROOT / "cache"
 
 model_config = {
-    "mode": "explain",
+    "mode": "visualize",
     "seed": 42,
 
     # =====================================================
@@ -133,6 +134,16 @@ model_config = {
 
     # Integrated Gradients settings
     "ig_steps": 32,
+
+    # =====================================================
+    # VISUALIZATION
+    # =====================================================
+
+    "visualize_exp": str(
+        ROOT
+        / "runs"
+        / "exp_002"  # change to your experiment folder
+    ),
 }
 
 if __name__ == "__main__":
@@ -142,3 +153,5 @@ if __name__ == "__main__":
         test(model_config)
     elif model_config["mode"] == "explain":
         explain(model_config)
+    elif model_config["mode"] == "visualize":
+        visualize(model_config)

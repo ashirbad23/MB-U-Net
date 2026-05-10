@@ -361,14 +361,18 @@ def save_heatmaps(
     )
 
     for i, band_idx in enumerate(bands_used):
-
-        attr = np.abs(full_attr[i])
-
-        attr = (
-            attr - attr.min()
-        ) / (
-            attr.max() - attr.min() + 1e-8
+        # Save raw floating-point attribution
+        np.save(
+            heatmap_dir / f"attr_band_{band_idx:02d}.npy",
+            full_attr[i].astype(np.float32)
         )
+
+        # Create visualization
+        attr = np.log1p(np.abs(full_attr[i]))
+
+        vmax = np.percentile(attr, 99)
+        attr = np.clip(attr, 0, vmax)
+        attr = attr / (vmax + 1e-8)
 
         plt.figure(figsize=(6, 6))
         plt.imshow(attr, cmap="inferno")
