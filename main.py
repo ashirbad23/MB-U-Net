@@ -135,6 +135,10 @@ model_config = {
     # Integrated Gradients settings
     "ig_steps": 64,
 
+    # Reuse top_k_selected.csv from another experiment
+    "explain_reference_exp": str(ROOT / "runs" / "exp_003"),  # e.g. ROOT / "runs" / "exp_003"
+    "explain_reference_dataset": "external",  # "internal" or "external"
+
     # =====================================================
     # VISUALIZATION
     # =====================================================
