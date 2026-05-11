@@ -190,41 +190,35 @@ def plot_global_band_importance(exp_dir, dataset_name="internal"):
     plt.close()
 
 
-# Add this function to src/visualization/visualization.py
-
-def plot_segmentation_examples(exp_dir, dataset_name="internal", top_k=5):
+def save_selected_examples(exp_dir, dataset_root, dataset_name="internal", top_k=5):
     """
-    Create 6-panel segmentation figures for the top-K images by MCC.
+    Save comprehensive qualitative examples.
 
-    Panels:
-    1. Ground Truth
-    2. Prediction
-    3. Probability Map
-    4. Error Map
-    5. Top Attribution Heatmap
-    6. Attribution Overlay
+    Output:
+        visualizations/<dataset_name>/selected_examples/<image_id>/
+            rgb.png
+            gt_boundary_on_rgb.png
+            pred_boundary_on_rgb.png
+            gt_vs_pred_overlay.png
+            probability_map.png
+            error_map.png
+            top_attribution.png
+            attribution_overlay.png
+            summary_panel.png
     """
     import cv2
-
-    # -------------------------------------------------
-    # Paths
-    # -------------------------------------------------
 
     results_dir = exp_dir / f"test_results_{dataset_name}"
     explain_dir = exp_dir / "explain" / dataset_name
 
-    vis_dir = (
-            get_visualization_dir(
-                exp_dir,
-                dataset_name=dataset_name
-            )
-            / "segmentation_examples"
+    base_dir = (
+        get_visualization_dir(
+            exp_dir,
+            dataset_name=dataset_name
+        )
+        / "selected_examples"
     )
-    vis_dir.mkdir(parents=True, exist_ok=True)
-
-    # -------------------------------------------------
-    # Load top-K image IDs
-    # -------------------------------------------------
+    base_dir.mkdir(parents=True, exist_ok=True)
 
     metrics_csv = results_dir / "all_image_metrics.csv"
 
@@ -232,32 +226,73 @@ def plot_segmentation_examples(exp_dir, dataset_name="internal", top_k=5):
         raise FileNotFoundError(metrics_csv)
 
     df = pd.read_csv(metrics_csv)
-    df = df.sort_values(
-        "MCC",
-        ascending=False
-    ).reset_index(drop=True)
+    df = (
+        df.sort_values("MCC", ascending=False)
+        .reset_index(drop=True)
+        .head(top_k)
+    )
 
-    top_df = df.head(top_k)
+    dataset_root = Path(dataset_root)
 
-    # -------------------------------------------------
-    # Process each image
-    # -------------------------------------------------
-
-    for _, row in top_df.iterrows():
+    for _, row in df.iterrows():
 
         image_id = row["image_id"]
-        mcc = row["MCC"]
+        mcc = float(row["MCC"])
 
-        # -------------------------------
-        # Load GT and prediction
-        # -------------------------------
+        print(f"Creating selected example for {image_id}")
+
+        image_dir = base_dir / image_id
+        image_dir.mkdir(parents=True, exist_ok=True)
+
+        # ==================================================
+        # LOAD ORIGINAL MULTI-BAND IMAGE
+        # ==================================================
+
+        if dataset_name == "internal":
+            image_path = dataset_root / "images" / f"{image_id}.npy"
+        else:
+            image_path = dataset_root / "images_test" / f"{image_id}.npy"
+
+        if not image_path.exists():
+            print(f"Skipping {image_id}: missing {image_path}")
+            continue
+
+        image = np.load(image_path)  # [C, H, W]
+
+        # Build RGB from Blue, Green, Red -> RGB
+        rgb = np.stack(
+            [
+                image[2],  # Red
+                image[1],  # Green
+                image[0],  # Blue
+            ],
+            axis=-1
+        ).astype(np.float32)
+
+        # Percentile stretch
+        for c in range(3):
+            p2, p98 = np.percentile(rgb[..., c], (2, 98))
+            rgb[..., c] = np.clip(rgb[..., c], p2, p98)
+            rgb[..., c] = (
+                rgb[..., c] - p2
+            ) / (p98 - p2 + 1e-8)
+
+        rgb = (rgb * 255).astype(np.uint8)
+
+        # ==================================================
+        # LOAD GT, PREDICTION, PROBABILITY
+        # ==================================================
 
         gt_path = results_dir / "gt" / f"gt_{image_id}.png"
         pred_path = results_dir / "preds" / f"pred_{image_id}.png"
         prob_path = results_dir / "probs" / f"prob_{image_id}.npy"
 
-        if not (gt_path.exists() and pred_path.exists() and prob_path.exists()):
-            print(f"Skipping {image_id}: missing files")
+        if not (
+            gt_path.exists()
+            and pred_path.exists()
+            and prob_path.exists()
+        ):
+            print(f"Skipping {image_id}: missing GT/PRED/PROB")
             continue
 
         gt = cv2.imread(str(gt_path), cv2.IMREAD_GRAYSCALE)
@@ -267,142 +302,227 @@ def plot_segmentation_examples(exp_dir, dataset_name="internal", top_k=5):
         gt = (gt > 127).astype(np.uint8)
         pred = (pred > 127).astype(np.uint8)
 
-        # -------------------------------
-        # Error Map
-        # -------------------------------
+        # ==================================================
+        # CONTOURS
+        # ==================================================
 
-        # RGB image
-        # TP = white
-        # FP = red
-        # FN = blue
-        error = np.zeros(
-            (gt.shape[0], gt.shape[1], 3),
-            dtype=np.uint8
+        gt_contours, _ = cv2.findContours(
+            gt,
+            cv2.RETR_EXTERNAL,
+            cv2.CHAIN_APPROX_SIMPLE
         )
 
-        tp = (pred == 1) & (gt == 1)
+        pred_contours, _ = cv2.findContours(
+            pred,
+            cv2.RETR_EXTERNAL,
+            cv2.CHAIN_APPROX_SIMPLE
+        )
+
+        # GT boundary
+        gt_overlay = rgb.copy()
+        cv2.drawContours(
+            gt_overlay,
+            gt_contours,
+            -1,
+            (0, 255, 0),
+            2
+        )
+
+        # Prediction boundary
+        pred_overlay = rgb.copy()
+        cv2.drawContours(
+            pred_overlay,
+            pred_contours,
+            -1,
+            (255, 0, 0),
+            2
+        )
+
+        # Combined GT + Prediction
+        combined_overlay = rgb.copy()
+        cv2.drawContours(
+            combined_overlay,
+            gt_contours,
+            -1,
+            (0, 255, 0),
+            2
+        )
+        cv2.drawContours(
+            combined_overlay,
+            pred_contours,
+            -1,
+            (255, 0, 0),
+            2
+        )
+
+        # ==================================================
+        # ERROR MAP OVERLAY ON RGB
+        # FP = Red, FN = Blue
+        # ==================================================
+
+        error_overlay = rgb.copy()
+
         fp = (pred == 1) & (gt == 0)
         fn = (pred == 0) & (gt == 1)
 
-        error[tp] = [255, 255, 255]
-        error[fp] = [255, 0, 0]
-        error[fn] = [0, 0, 255]
+        fp_mask = np.zeros_like(gt, dtype=np.uint8)
+        fn_mask = np.zeros_like(gt, dtype=np.uint8)
 
-        # -------------------------------
-        # Load top attribution heatmap
-        # -------------------------------
+        fp_mask[fp] = 1
+        fn_mask[fn] = 1
+
+        fp_contours, _ = cv2.findContours(
+            fp_mask,
+            cv2.RETR_EXTERNAL,
+            cv2.CHAIN_APPROX_SIMPLE
+        )
+
+        fn_contours, _ = cv2.findContours(
+            fn_mask,
+            cv2.RETR_EXTERNAL,
+            cv2.CHAIN_APPROX_SIMPLE
+        )
+
+        cv2.drawContours(
+            error_overlay,
+            fp_contours,
+            -1,
+            (255, 0, 0),   # red
+            2
+        )
+
+        cv2.drawContours(
+            error_overlay,
+            fn_contours,
+            -1,
+            (0, 0, 255),   # blue
+            2
+        )
+
+        # ==================================================
+        # LOAD TOP INTEGRATED GRADIENTS HEATMAP
+        # ==================================================
+
+        top_band = -1
+        attr_uint8 = np.zeros_like(gt, dtype=np.uint8)
+        attribution_overlay = rgb.copy()
 
         band_csv = (
-                explain_dir
-                / image_id
-                / "band_importance.csv"
+            explain_dir
+            / image_id
+            / "band_importance.csv"
         )
 
         if band_csv.exists():
-            band_df = pd.read_csv(band_csv)
-            top_band = int(band_df.iloc[0]["band_index"])
 
-            heatmap_path = (
-                    explain_dir
-                    / image_id
-                    / "heatmaps"
-                    / f"attr_band_{top_band:02d}.npy"
+            band_df = pd.read_csv(band_csv)
+            top_band = int(
+                band_df.iloc[0]["band_index"]
             )
 
-            if heatmap_path.exists():
-                attr = np.load(heatmap_path)
+            attr_path = (
+                explain_dir
+                / image_id
+                / "heatmaps"
+                / f"attr_band_{top_band:02d}.npy"
+            )
+
+            if attr_path.exists():
+                attr = np.load(attr_path)
                 attr = np.log1p(np.abs(attr))
 
                 vmax = np.percentile(attr, 99)
                 attr = np.clip(attr, 0, vmax)
-                attr = (attr / (vmax + 1e-8) * 255).astype(np.uint8)
-            else:
-                attr = np.zeros_like(gt) * 255
-        else:
-            top_band = -1
-            attr = np.zeros_like(gt) * 255
 
-        # Ensure same size
-        if attr.shape != gt.shape:
-            attr = cv2.resize(
-                attr,
-                (gt.shape[1], gt.shape[0])
-            )
+                attr_uint8 = (
+                    attr / (vmax + 1e-8) * 255
+                ).astype(np.uint8)
 
-        # -------------------------------
-        # Attribution Overlay
-        # -------------------------------
+                if attr_uint8.shape != gt.shape:
+                    attr_uint8 = cv2.resize(
+                        attr_uint8,
+                        (gt.shape[1], gt.shape[0])
+                    )
 
-        # Convert probability map to grayscale RGB base
-        prob_norm = (prob * 255).clip(0, 255).astype(np.uint8)
+                heat = cv2.applyColorMap(
+                    attr_uint8,
+                    cv2.COLORMAP_INFERNO
+                )
 
-        base = cv2.cvtColor(
-            prob_norm,
-            cv2.COLOR_GRAY2RGB
-        )
+                heat = cv2.cvtColor(
+                    heat,
+                    cv2.COLOR_BGR2RGB
+                )
 
-        # Create colored attribution heatmap
-        heat = cv2.applyColorMap(
-            attr,
-            cv2.COLORMAP_INFERNO
-        )
+                attribution_overlay = cv2.addWeighted(
+                    rgb,
+                    0.65,
+                    heat,
+                    0.35,
+                    0
+                )
 
-        heat = cv2.cvtColor(
-            heat,
-            cv2.COLOR_BGR2RGB
-        )
+        # ==================================================
+        # SAVE INDIVIDUAL IMAGES
+        # ==================================================
 
-        # Blend base and heatmap
-        overlay = cv2.addWeighted(
-            base,  # underlying probability image
-            0.6,
-            heat,  # attribution heatmap
-            0.4,
-            0
-        )
+        plt.imsave(image_dir / "rgb.png", rgb)
+        plt.imsave(image_dir / "gt_boundary_on_rgb.png", gt_overlay)
+        plt.imsave(image_dir / "pred_boundary_on_rgb.png", pred_overlay)
+        plt.imsave(image_dir / "gt_vs_pred_overlay.png", combined_overlay)
+        plt.imsave(image_dir / "probability_map.png", prob, cmap="turbo")
+        plt.imsave(image_dir / "error_map.png", error_overlay)
+        plt.imsave(image_dir / "top_attribution.png", attr_uint8, cmap="inferno")
+        plt.imsave(image_dir / "attribution_overlay.png", attribution_overlay)
 
-        # -------------------------------
-        # Plot
-        # -------------------------------
+        # ==================================================
+        # SUMMARY PANEL (2 x 4)
+        # ==================================================
 
         fig, axes = plt.subplots(
             2,
-            3,
-            figsize=(12, 8)
+            4,
+            figsize=(24, 12)
         )
 
         axes = axes.ravel()
 
-        axes[0].imshow(gt, cmap="gray")
-        axes[0].set_title("Ground Truth")
+        axes[0].imshow(rgb)
+        axes[0].set_title("RGB Composite")
 
-        axes[1].imshow(pred, cmap="gray")
-        axes[1].set_title("Prediction")
+        axes[1].imshow(gt_overlay)
+        axes[1].set_title("GT Boundary")
 
-        axes[2].imshow(prob, cmap="inferno")
-        axes[2].set_title("Probability")
+        axes[2].imshow(pred_overlay)
+        axes[2].set_title("Prediction Boundary")
 
-        axes[3].imshow(error)
-        axes[3].set_title("Error Map")
+        axes[3].imshow(combined_overlay)
+        axes[3].set_title("GT (Green) vs Pred (Red)")
 
-        axes[4].imshow(attr, cmap="inferno")
-        axes[4].set_title(f"Top Band {top_band}")
+        axes[4].imshow(prob, cmap="turbo")
+        axes[4].set_title("Probability Map")
 
-        axes[5].imshow(overlay)
-        axes[5].set_title("Attribution Overlay")
+        axes[5].imshow(error_overlay)
+        axes[5].set_title("Error Map (FP Red, FN Blue)")
+
+        axes[6].imshow(attr_uint8, cmap="inferno")
+        axes[6].set_title(f"Top IG Band {top_band}")
+
+        axes[7].imshow(attribution_overlay)
+        axes[7].set_title("IG Overlay on RGB")
 
         for ax in axes:
             ax.axis("off")
 
         fig.suptitle(
             f"{image_id} | MCC = {mcc:.4f}",
-            fontsize=16
+            fontsize=22
         )
 
         plt.tight_layout()
 
         plt.savefig(
-            vis_dir / f"{image_id}.png",
+            image_dir / "summary_panel.png",
             dpi=300,
             bbox_inches="tight"
         )
@@ -438,9 +558,10 @@ def visualize(config):
         dataset_name=dataset_name
     )
 
-    print("Generating segmentation examples...")
-    plot_segmentation_examples(
+    print("Generating selected examples...")
+    save_selected_examples(
         exp_dir,
+        dataset_root=config['dataset'],
         dataset_name=dataset_name,
         top_k=config.get("top_k", 5)
     )

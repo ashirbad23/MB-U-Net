@@ -130,10 +130,10 @@ model_config = {
     "explain_dataset": "internal",
 
     # Number of best images (sorted by MCC)
-    "top_k": 5,
+    "top_k": 20,
 
     # Integrated Gradients settings
-    "ig_steps": 32,
+    "ig_steps": 64,
 
     # =====================================================
     # VISUALIZATION
