@@ -85,34 +85,82 @@ def get_explain_dir(config):
 
 def load_top_k_images(config):
     """
-    Returns top-K rows from all_image_metrics.csv
-    sorted by MCC descending.
+    Load top-K images.
+
+    If explain_reference_exp is provided, reuse the
+    top_k_selected.csv from that experiment.
+
+    Otherwise, select top-K images from the current
+    experiment's all_image_metrics.csv.
     """
-    results_dir = get_results_dir(config)
-
-    csv_path = results_dir / "all_image_metrics.csv"
-
-    if not csv_path.exists():
-        raise FileNotFoundError(
-            f"{csv_path} not found. Run test.py first."
-        )
-
-    df = pd.read_csv(csv_path)
-    df = df.sort_values(
-        "MCC",
-        ascending=False
-    ).reset_index(drop=True)
-
     top_k = config.get("top_k", 5)
-    top_df = df.head(top_k).copy()
 
-    # Save selected rows
-    top_df.to_csv(
-        get_explain_dir(config) / "top_k_selected.csv",
-        index=False
+    reference_exp = config.get("explain_reference_exp", None)
+    reference_dataset = config.get(
+        "explain_reference_dataset",
+        config.get("explain_dataset", "internal")
     )
 
-    return top_df
+    # -------------------------------------------------
+    # CASE 1: Reuse top_k_selected.csv from another experiment
+    # -------------------------------------------------
+    if reference_exp is not None:
+
+        csv_path = (
+            Path(reference_exp)
+            / "explain"
+            / reference_dataset.lower()
+            / "top_k_selected.csv"
+        )
+
+        if not csv_path.exists():
+            raise FileNotFoundError(csv_path)
+
+        df = pd.read_csv(csv_path)
+
+        # Keep only top_k rows in case the source had more
+        df = (
+            df
+            .reset_index(drop=True)
+            .head(top_k)
+        )
+
+        print(f"Using reference image IDs from: {csv_path}")
+
+        return df
+
+    # -------------------------------------------------
+    # CASE 2: Select top-K from current experiment
+    # -------------------------------------------------
+    exp_dir = Path(config["explain_exp"])
+    dataset_name = config.get(
+        "explain_dataset",
+        "internal"
+    ).lower()
+
+    metrics_csv = (
+        exp_dir
+        / f"test_results_{dataset_name}"
+        / "all_image_metrics.csv"
+    )
+
+    if not metrics_csv.exists():
+        raise FileNotFoundError(metrics_csv)
+
+    df = pd.read_csv(metrics_csv)
+
+    df = (
+        df
+        .sort_values("MCC", ascending=False)
+        .reset_index(drop=True)
+        .head(top_k)
+    )
+
+    # Save selected IDs for reuse
+    save_dir = get_explain_dir(config)
+    df.to_csv(save_dir / "top_k_selected.csv", index=False)
+
+    return df
 
 
 def build_image_index_map(dataset):
