@@ -14,7 +14,7 @@ CHECKPOINTS = ROOT / "model_checkpoints"
 CACHE = ROOT / "cache"
 
 model_config = {
-    "mode": "visualize",
+    "mode": "train",
     "seed": 42,
 
     # =====================================================
@@ -51,7 +51,7 @@ model_config = {
     # BANDS
     # =====================================================
 
-    "bands_used": list(range(18)),
+    "bands_used": [0, 1, 2, 3, 4, 5, 6],
 
     # =====================================================
     # MODEL
@@ -127,7 +127,7 @@ model_config = {
     # Which dataset to explain:
     # "internal" -> uses test_results_internal
     # "external" -> uses test_results_external
-    "explain_dataset": "internal",
+    "explain_dataset": "external",
 
     # Number of best images (sorted by MCC)
     "top_k": 20,
