@@ -34,6 +34,26 @@ sns.set_theme(style="darkgrid", context="talk")
 # HELPERS
 # =====================================================
 
+def get_visualization_dir(exp_dir, dataset_name=None):
+    """
+    If dataset_name is None:
+        runs/exp_xxx/visualizations/common
+
+    If dataset_name = "internal":
+        runs/exp_xxx/visualizations/internal
+
+    If dataset_name = "external":
+        runs/exp_xxx/visualizations/external
+    """
+    if dataset_name is None:
+        vis_dir = exp_dir / "visualizations"
+    else:
+        vis_dir = exp_dir / "visualizations" / dataset_name
+
+    vis_dir.mkdir(parents=True, exist_ok=True)
+    return vis_dir
+
+
 def load_test_metrics(exp_dir, dataset_name):
     """
     dataset_name: 'internal' or 'external'
@@ -53,12 +73,6 @@ def load_test_metrics(exp_dir, dataset_name):
     return metrics
 
 
-def get_visualization_dir(exp_dir):
-    vis_dir = exp_dir / "visualizations"
-    vis_dir.mkdir(parents=True, exist_ok=True)
-    return vis_dir
-
-
 # =====================================================
 # METRIC COMPARISON
 # =====================================================
@@ -67,6 +81,7 @@ def plot_metric_comparison(exp_dir):
     """
     Compare internal vs external metrics using seaborn.
     """
+    # Common figure comparing both datasets
     internal = load_test_metrics(exp_dir, "internal")
     external = load_test_metrics(exp_dir, "external")
 
@@ -102,7 +117,7 @@ def plot_metric_comparison(exp_dir):
     plt.title("Internal vs External Test Performance")
     plt.tight_layout()
 
-    vis_dir = get_visualization_dir(exp_dir)
+    vis_dir = get_visualization_dir(exp_dir, dataset_name=None)
 
     plt.savefig(
         vis_dir / "metric_comparison.png",
@@ -116,11 +131,8 @@ def plot_metric_comparison(exp_dir):
 # GLOBAL BAND IMPORTANCE
 # =====================================================
 
-def plot_global_band_importance(exp_dir):
-    """
-    Average band importance across all explained images.
-    """
-    explain_dir = exp_dir / "explain"
+def plot_global_band_importance(exp_dir, dataset_name="internal"):
+    explain_dir = exp_dir / "explain" / dataset_name
 
     csv_paths = list(
         explain_dir.glob("*/band_importance.csv")
@@ -143,7 +155,10 @@ def plot_global_band_importance(exp_dir):
         .reset_index(drop=True)
     )
 
-    vis_dir = get_visualization_dir(exp_dir)
+    vis_dir = get_visualization_dir(
+        exp_dir,
+        dataset_name=dataset_name
+    )
 
     # Save CSV
     global_df.to_csv(
@@ -196,10 +211,13 @@ def plot_segmentation_examples(exp_dir, dataset_name="internal", top_k=5):
     # -------------------------------------------------
 
     results_dir = exp_dir / f"test_results_{dataset_name}"
-    explain_dir = exp_dir / "explain"
+    explain_dir = exp_dir / "explain" / dataset_name
 
     vis_dir = (
-            get_visualization_dir(exp_dir)
+            get_visualization_dir(
+                exp_dir,
+                dataset_name=dataset_name
+            )
             / "segmentation_examples"
     )
     vis_dir.mkdir(parents=True, exist_ok=True)
@@ -413,12 +431,17 @@ def visualize(config):
 
     # 2. Global band importance
     print("Generating global band importance...")
-    plot_global_band_importance(exp_dir)
+    dataset_name = config.get("explain_dataset", "internal").lower()
+
+    plot_global_band_importance(
+        exp_dir,
+        dataset_name=dataset_name
+    )
 
     print("Generating segmentation examples...")
     plot_segmentation_examples(
         exp_dir,
-        dataset_name=config.get("explain_dataset", "internal"),
+        dataset_name=dataset_name,
         top_k=config.get("top_k", 5)
     )
 

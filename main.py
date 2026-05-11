@@ -14,7 +14,7 @@ CHECKPOINTS = ROOT / "model_checkpoints"
 CACHE = ROOT / "cache"
 
 model_config = {
-    "mode": "train",
+    "mode": "visualize",
     "seed": 42,
 
     # =====================================================
@@ -110,7 +110,7 @@ model_config = {
 
     "test_exp": str(ROOT
                     / "runs"
-                    / "exp_002"),
+                    / "exp_003"),
     # "test_threshold": 0.60,
 
     "ckpt_type": "best",
@@ -121,7 +121,7 @@ model_config = {
     "explain_exp": str(
         ROOT
         / "runs"
-        / "exp_002"  # change to your target experiment
+        / "exp_003"  # change to your target experiment
     ),
 
     # Which dataset to explain:
@@ -142,7 +142,7 @@ model_config = {
     "visualize_exp": str(
         ROOT
         / "runs"
-        / "exp_002"  # change to your experiment folder
+        / "exp_003"  # change to your experiment folder
     ),
 }
 

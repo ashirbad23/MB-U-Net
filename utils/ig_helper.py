@@ -52,8 +52,30 @@ def get_results_dir(config):
 
 
 def get_explain_dir(config):
-    explain_dir = Path(config["explain_exp"]) / "explain"
-    explain_dir.mkdir(parents=True, exist_ok=True)
+    """
+    Returns:
+        runs/exp_xxx/explain/internal
+        or
+        runs/exp_xxx/explain/external
+    """
+    exp_dir = Path(config["explain_exp"])
+
+    dataset_name = config.get(
+        "explain_dataset",
+        "internal"
+    ).lower()
+
+    explain_dir = (
+        exp_dir
+        / "explain"
+        / dataset_name
+    )
+
+    explain_dir.mkdir(
+        parents=True,
+        exist_ok=True
+    )
+
     return explain_dir
 
 
