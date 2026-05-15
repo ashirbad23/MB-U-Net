@@ -101,6 +101,18 @@ def load_top_k_images(config):
         config.get("explain_dataset", "internal")
     )
 
+    exp_dir = Path(config["explain_exp"])
+    dataset_name = config.get(
+        "explain_dataset",
+        "internal"
+    ).lower()
+
+    metrics_csv = (
+            exp_dir
+            / f"test_results_{dataset_name}"
+            / "all_image_metrics.csv"
+    )
+
     # -------------------------------------------------
     # CASE 1: Reuse top_k_selected.csv from another experiment
     # -------------------------------------------------
@@ -116,33 +128,27 @@ def load_top_k_images(config):
         if not csv_path.exists():
             raise FileNotFoundError(csv_path)
 
-        df = pd.read_csv(csv_path)
+        dft = pd.read_csv(csv_path)
+        df = pd.read_csv(metrics_csv)
 
         # Keep only top_k rows in case the source had more
         df = (
-            df
+            df[df["image_id"].isin(dft["image_id"])]
+            .sort_values("MCC", ascending=False)
             .reset_index(drop=True)
             .head(top_k)
         )
 
         print(f"Using reference image IDs from: {csv_path}")
 
+        save_dir = get_explain_dir(config)
+        df.to_csv(save_dir / "top_k_selected.csv", index=False)
+
         return df
 
     # -------------------------------------------------
     # CASE 2: Select top-K from current experiment
     # -------------------------------------------------
-    exp_dir = Path(config["explain_exp"])
-    dataset_name = config.get(
-        "explain_dataset",
-        "internal"
-    ).lower()
-
-    metrics_csv = (
-        exp_dir
-        / f"test_results_{dataset_name}"
-        / "all_image_metrics.csv"
-    )
 
     if not metrics_csv.exists():
         raise FileNotFoundError(metrics_csv)

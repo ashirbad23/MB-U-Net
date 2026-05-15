@@ -408,7 +408,7 @@ if __name__ == "__main__":
 
     in_channels = 18
     out_channels = 1
-    ch_head = [16, 8, 8]
+    ch_head = [16, 8, 4]
     num_levels = 4  # 🔥 THIS controls depth now (But don't increase the depth beyond 5 for 64x64 input)
     dropout = 0.1
 

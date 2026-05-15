@@ -190,7 +190,7 @@ def plot_global_band_importance(exp_dir, dataset_name="internal"):
     plt.close()
 
 
-def save_selected_examples(exp_dir, dataset_root, dataset_name="internal", top_k=5):
+def save_selected_examples(exp_dir, dataset_root, dataset_name="internal", top_k=5, refer=False):
     """
     Save comprehensive qualitative examples.
 
@@ -220,7 +220,7 @@ def save_selected_examples(exp_dir, dataset_root, dataset_name="internal", top_k
     )
     base_dir.mkdir(parents=True, exist_ok=True)
 
-    metrics_csv = results_dir / "all_image_metrics.csv"
+    metrics_csv = results_dir / "all_image_metrics.csv" if refer is None else explain_dir / "top_k_selected.csv"
 
     if not metrics_csv.exists():
         raise FileNotFoundError(metrics_csv)
@@ -563,7 +563,8 @@ def visualize(config):
         exp_dir,
         dataset_root=config['dataset'],
         dataset_name=dataset_name,
-        top_k=config.get("top_k", 5)
+        top_k=config.get("top_k", 5),
+        refer=True if config["explain_reference_exp"] is not None else False
     )
 
     print("Visualization completed successfully.")

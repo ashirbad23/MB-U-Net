@@ -14,7 +14,7 @@ CHECKPOINTS = ROOT / "model_checkpoints"
 CACHE = ROOT / "cache"
 
 model_config = {
-    "mode": "train",
+    "mode": "visualize",
     "seed": 42,
 
     # =====================================================
@@ -29,8 +29,8 @@ model_config = {
     # RESUME
     # =====================================================
 
-    "resume": False,
-    "resume_path": None,
+    "resume": True,
+    "resume_path": str(ROOT / "runs/exp_004"),
 
     # =====================================================
     # DEVICE
@@ -110,7 +110,7 @@ model_config = {
 
     "test_exp": str(ROOT
                     / "runs"
-                    / "exp_003"),
+                    / "exp_004"),
     # "test_threshold": 0.60,
 
     "ckpt_type": "best",
@@ -121,13 +121,13 @@ model_config = {
     "explain_exp": str(
         ROOT
         / "runs"
-        / "exp_003"  # change to your target experiment
+        / "exp_004"  # change to your target experiment
     ),
 
     # Which dataset to explain:
     # "internal" -> uses test_results_internal
     # "external" -> uses test_results_external
-    "explain_dataset": "external",
+    "explain_dataset": "internal",
 
     # Number of best images (sorted by MCC)
     "top_k": 20,
@@ -137,7 +137,7 @@ model_config = {
 
     # Reuse top_k_selected.csv from another experiment
     "explain_reference_exp": str(ROOT / "runs" / "exp_003"),  # e.g. ROOT / "runs" / "exp_003"
-    "explain_reference_dataset": "external",  # "internal" or "external"
+    "explain_reference_dataset": "internal",  # "internal" or "external"
 
     # =====================================================
     # VISUALIZATION
@@ -146,7 +146,7 @@ model_config = {
     "visualize_exp": str(
         ROOT
         / "runs"
-        / "exp_003"  # change to your experiment folder
+        / "exp_004"  # change to your experiment folder
     ),
 }
 
