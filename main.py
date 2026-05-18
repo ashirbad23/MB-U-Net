@@ -150,6 +150,7 @@ model_config = {
     ),
 }
 
+
 if __name__ == "__main__":
     if model_config["mode"] == "train":
         train(model_config)
