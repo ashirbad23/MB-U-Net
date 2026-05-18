@@ -311,27 +311,27 @@ if __name__ == "__main__":
                 print(sorted(extreme_samples, key=lambda x: -x[1])[:5])
 
 
-    # dataset = GlacierTestDataset(
-    #     path=DATASET,
-    #     patch_size=512,
-    #     transform=None,
-    #     bands_used=None
-    # )
-    #
-    # analyze_dataset(dataset, "TEST DATA RAW")
-
-    trans_dataset = GlacierTestDataset(
+    dataset = GlacierTestDataset(
         path=DATASET,
         patch_size=512,
-        transform=GlacierTransform(
-            normalize=True,
-            use_rotation=False,
-            use_radiometric=False
-        ),
-        bands_used=None,
-        mode=None,
-        mode_path=MODE_PATH
+        transform=None,
+        bands_used=None
     )
-    print(len(trans_dataset))
+
+    analyze_dataset(dataset, "TEST DATA RAW")
+
+    # trans_dataset = GlacierTestDataset(
+    #     path=DATASET,
+    #     patch_size=512,
+    #     transform=GlacierTransform(
+    #         normalize=True,
+    #         use_rotation=False,
+    #         use_radiometric=False
+    #     ),
+    #     bands_used=None,
+    #     mode=None,
+    #     mode_path=MODE_PATH
+    # )
+    # print(len(trans_dataset))
 
     # analyze_dataset(trans_dataset, "TEST DATA Normalized")

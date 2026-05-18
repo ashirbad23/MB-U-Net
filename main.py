@@ -29,8 +29,8 @@ model_config = {
     # RESUME
     # =====================================================
 
-    "resume": True,
-    "resume_path": str(ROOT / "runs/exp_004"),
+    "resume": False,
+    "resume_path": None,
 
     # =====================================================
     # DEVICE
@@ -51,7 +51,7 @@ model_config = {
     # BANDS
     # =====================================================
 
-    "bands_used": [0, 1, 2, 3, 4, 5, 6],
+    "bands_used": list(range(6)),
 
     # =====================================================
     # MODEL
@@ -110,7 +110,7 @@ model_config = {
 
     "test_exp": str(ROOT
                     / "runs"
-                    / "exp_004"),
+                    / "exp_005"),
     # "test_threshold": 0.60,
 
     "ckpt_type": "best",
@@ -121,13 +121,13 @@ model_config = {
     "explain_exp": str(
         ROOT
         / "runs"
-        / "exp_004"  # change to your target experiment
+        / "exp_005"  # change to your target experiment
     ),
 
     # Which dataset to explain:
     # "internal" -> uses test_results_internal
     # "external" -> uses test_results_external
-    "explain_dataset": "internal",
+    # "explain_dataset": "external",
 
     # Number of best images (sorted by MCC)
     "top_k": 20,

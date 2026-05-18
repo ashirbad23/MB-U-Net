@@ -9,6 +9,7 @@
 /data/
 /config/*.py
 /cache/
+/figures/
 # ===============================
 
 # MODEL WEIGHTS / CHECKPOINTS

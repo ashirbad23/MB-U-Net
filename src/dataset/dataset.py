@@ -173,18 +173,18 @@ if __name__ == "__main__":
     # # =========================
     # # RAW DATA ANALYSIS
     # # =========================
-    # raw_dataset = GlacierDataset(
-    #     path=DATASET,
-    #     patch_size=512,
-    #     overlap=1,
-    #     mode=None,
-    #     transform=None,  # IMPORTANT → raw masks
-    #     bands_used=None,
-    #     mode_path="../../config/train_val_split.json"
-    # )
-    # print(len(raw_dataset))
-    #
-    # analyze_dataset(raw_dataset, "RAW DATA")
+    raw_dataset = GlacierDataset(
+        path=DATASET,
+        patch_size=512,
+        overlap=1,
+        mode=None,
+        transform=None,  # IMPORTANT → raw masks
+        bands_used=None,
+        mode_path="../../config/train_val_split.json"
+    )
+    print(len(raw_dataset))
+
+    analyze_dataset(raw_dataset, "RAW DATA")
     # #
     # # # =========================
     # # # AFTER TRANSFORM ANALYSIS
@@ -204,121 +204,121 @@ if __name__ == "__main__":
     # CLASS IMBALANCE (SEPARATE PASS)
     # =========================
 
-    print("\n===== CLASS IMBALANCE (FAST PASS) =====")
-    print("\n===== Train =====")
-
-    dataset = GlacierDataset(
-        path=DATASET,
-        patch_size=512,
-        overlap=1,
-        mode="train1",
-        transform=None,  # IMPORTANT → raw masks
-        bands_used=None,
-        mode_path="../../config/train_val_test_split.json"
-    )
-
-    total_pixels = 0
-    total_fg = 0
-    empty_patches = 0
-
-    for i in tqdm(range(len(dataset))):
-        _, mask = dataset[i]
-        mask = mask.numpy()
-
-        fg = mask.sum()
-        total_fg += fg
-        total_pixels += mask.size
-
-        if fg == 0:
-            empty_patches += 1
-
-    # ---- RESULTS ----
-    print("Total pixels      :", total_pixels)
-    print("Foreground pixels :", int(total_fg))
-    print("Background pixels :", int(total_pixels - total_fg))
-
-    fg_ratio = total_fg / total_pixels
-    print("Foreground ratio  :", fg_ratio)
-
-    print("Empty patches     :", empty_patches)
-    print("Total patches     :", len(dataset))
-    print("Empty patch ratio :", empty_patches / len(dataset))
-
-    print("\n===== Test =====")
-
-    dataset = GlacierDataset(
-        path=DATASET,
-        patch_size=512,
-        overlap=1,
-        mode="test",
-        transform=None,  # IMPORTANT → raw masks
-        bands_used=None,
-        mode_path="../../config/train_val_test_split.json"
-    )
-
-    total_pixels = 0
-    total_fg = 0
-    empty_patches = 0
-
-    for i in tqdm(range(len(dataset))):
-        _, mask = dataset[i]
-        mask = mask.numpy()
-
-        fg = mask.sum()
-        total_fg += fg
-        total_pixels += mask.size
-
-        if fg == 0:
-            empty_patches += 1
-
-    # ---- RESULTS ----
-    print("Total pixels      :", total_pixels)
-    print("Foreground pixels :", int(total_fg))
-    print("Background pixels :", int(total_pixels - total_fg))
-
-    fg_ratio = total_fg / total_pixels
-    print("Foreground ratio  :", fg_ratio)
-
-    print("Empty patches     :", empty_patches)
-    print("Total patches     :", len(dataset))
-    print("Empty patch ratio :", empty_patches / len(dataset))
-
-    print("\n===== Val =====")
-
-    dataset = GlacierDataset(
-        path=DATASET,
-        patch_size=512,
-        overlap=1,
-        mode="val",
-        transform=None,  # IMPORTANT → raw masks
-        bands_used=None,
-        mode_path="../../config/train_val_test_split.json"
-    )
-
-    total_pixels = 0
-    total_fg = 0
-    empty_patches = 0
-
-    for i in tqdm(range(len(dataset))):
-        _, mask = dataset[i]
-        mask = mask.numpy()
-
-        fg = mask.sum()
-        total_fg += fg
-        total_pixels += mask.size
-
-        if fg == 0:
-            empty_patches += 1
-
-    # ---- RESULTS ----
-    print("Total pixels      :", total_pixels)
-    print("Foreground pixels :", int(total_fg))
-    print("Background pixels :", int(total_pixels - total_fg))
-
-    fg_ratio = total_fg / total_pixels
-    print("Foreground ratio  :", fg_ratio)
-
-    print("Empty patches     :", empty_patches)
-    print("Total patches     :", len(dataset))
-    print("Empty patch ratio :", empty_patches / len(dataset))
+    # print("\n===== CLASS IMBALANCE (FAST PASS) =====")
+    # print("\n===== Train =====")
+    #
+    # dataset = GlacierDataset(
+    #     path=DATASET,
+    #     patch_size=512,
+    #     overlap=1,
+    #     mode="train1",
+    #     transform=None,  # IMPORTANT → raw masks
+    #     bands_used=None,
+    #     mode_path="../../config/train_val_test_split.json"
+    # )
+    #
+    # total_pixels = 0
+    # total_fg = 0
+    # empty_patches = 0
+    #
+    # for i in tqdm(range(len(dataset))):
+    #     _, mask = dataset[i]
+    #     mask = mask.numpy()
+    #
+    #     fg = mask.sum()
+    #     total_fg += fg
+    #     total_pixels += mask.size
+    #
+    #     if fg == 0:
+    #         empty_patches += 1
+    #
+    # # ---- RESULTS ----
+    # print("Total pixels      :", total_pixels)
+    # print("Foreground pixels :", int(total_fg))
+    # print("Background pixels :", int(total_pixels - total_fg))
+    #
+    # fg_ratio = total_fg / total_pixels
+    # print("Foreground ratio  :", fg_ratio)
+    #
+    # print("Empty patches     :", empty_patches)
+    # print("Total patches     :", len(dataset))
+    # print("Empty patch ratio :", empty_patches / len(dataset))
+    #
+    # print("\n===== Test =====")
+    #
+    # dataset = GlacierDataset(
+    #     path=DATASET,
+    #     patch_size=512,
+    #     overlap=1,
+    #     mode="test",
+    #     transform=None,  # IMPORTANT → raw masks
+    #     bands_used=None,
+    #     mode_path="../../config/train_val_test_split.json"
+    # )
+    #
+    # total_pixels = 0
+    # total_fg = 0
+    # empty_patches = 0
+    #
+    # for i in tqdm(range(len(dataset))):
+    #     _, mask = dataset[i]
+    #     mask = mask.numpy()
+    #
+    #     fg = mask.sum()
+    #     total_fg += fg
+    #     total_pixels += mask.size
+    #
+    #     if fg == 0:
+    #         empty_patches += 1
+    #
+    # # ---- RESULTS ----
+    # print("Total pixels      :", total_pixels)
+    # print("Foreground pixels :", int(total_fg))
+    # print("Background pixels :", int(total_pixels - total_fg))
+    #
+    # fg_ratio = total_fg / total_pixels
+    # print("Foreground ratio  :", fg_ratio)
+    #
+    # print("Empty patches     :", empty_patches)
+    # print("Total patches     :", len(dataset))
+    # print("Empty patch ratio :", empty_patches / len(dataset))
+    #
+    # print("\n===== Val =====")
+    #
+    # dataset = GlacierDataset(
+    #     path=DATASET,
+    #     patch_size=512,
+    #     overlap=1,
+    #     mode="val",
+    #     transform=None,  # IMPORTANT → raw masks
+    #     bands_used=None,
+    #     mode_path="../../config/train_val_test_split.json"
+    # )
+    #
+    # total_pixels = 0
+    # total_fg = 0
+    # empty_patches = 0
+    #
+    # for i in tqdm(range(len(dataset))):
+    #     _, mask = dataset[i]
+    #     mask = mask.numpy()
+    #
+    #     fg = mask.sum()
+    #     total_fg += fg
+    #     total_pixels += mask.size
+    #
+    #     if fg == 0:
+    #         empty_patches += 1
+    #
+    # # ---- RESULTS ----
+    # print("Total pixels      :", total_pixels)
+    # print("Foreground pixels :", int(total_fg))
+    # print("Background pixels :", int(total_pixels - total_fg))
+    #
+    # fg_ratio = total_fg / total_pixels
+    # print("Foreground ratio  :", fg_ratio)
+    #
+    # print("Empty patches     :", empty_patches)
+    # print("Total patches     :", len(dataset))
+    # print("Empty patch ratio :", empty_patches / len(dataset))
 

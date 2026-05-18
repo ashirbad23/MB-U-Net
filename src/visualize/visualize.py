@@ -134,52 +134,103 @@ def plot_metric_comparison(exp_dir):
 def plot_global_band_importance(exp_dir, dataset_name="internal"):
     explain_dir = exp_dir / "explain" / dataset_name
 
-    csv_paths = list(
-        explain_dir.glob("*/band_importance.csv")
-    )
+    CHANNEL_NAMES = [
+        "Blue",
+        "Green",
+        "Red",
+        "NIR",
+        "SWIR1",
+        "SWIR2",
+        "DEM",
+        "Slope",
+        "Aspect Sin",
+        "Aspect Cos",
+        "Profile Curvature",
+        "Planform Curvature",
+        "k_max",
+        "k_min",
+        "Mean Curvature",
+        "Gaussian Curvature",
+        "Slope Azimuth Divergence",
+        "Unsphericity",
+    ]
+
+    csv_paths = list(explain_dir.glob("*/band_importance.csv"))
 
     if len(csv_paths) == 0:
         raise FileNotFoundError(
-            "No band_importance.csv files found."
+            f"No band_importance.csv files found in {explain_dir}"
         )
 
+    # Load all per-image importance CSVs
     dfs = [pd.read_csv(p) for p in csv_paths]
-
     combined = pd.concat(dfs, ignore_index=True)
 
+    # Average across all explained images
     global_df = (
         combined
         .groupby("band_index", as_index=False)["importance"]
         .mean()
+    )
+
+    # Add channel names
+    global_df["channel_name"] = global_df["band_index"].apply(
+        lambda i: CHANNEL_NAMES[int(i)]
+    )
+
+    # Sort by importance (highest first)
+    global_df = (
+        global_df
         .sort_values("importance", ascending=False)
         .reset_index(drop=True)
     )
 
+    # Create label: "6 - DEM"
+    global_df["band_label"] = global_df.apply(
+        lambda row: f"{int(row['band_index'])} - {row['channel_name']}",
+        axis=1
+    )
+
+    # Output directory
     vis_dir = get_visualization_dir(
         exp_dir,
         dataset_name=dataset_name
     )
 
-    # Save CSV
+    # Save CSV with channel names included
     global_df.to_csv(
         vis_dir / "global_band_importance.csv",
         index=False
     )
 
-    # Convert band labels to strings for plotting
-    global_df["band_label"] = global_df["band_index"].astype(str)
+    # Plot
+    plt.figure(figsize=(12, 7))
 
-    plt.figure(figsize=(11, 5))
-
-    sns.barplot(
+    ax = sns.barplot(
         data=global_df,
         x="band_label",
         y="importance"
     )
 
-    plt.xlabel("Band Index")
+    plt.xlabel("Input Channel")
     plt.ylabel("Average Importance")
-    plt.title("Global Band Importance (Integrated Gradients)")
+
+    # Rotate labels for readability
+    plt.xticks(rotation=45, ha="right")
+
+    # Optional: annotate bars with numeric values
+    for p in ax.patches:
+        height = p.get_height()
+        ax.annotate(
+            f"{height:.3f}",
+            (p.get_x() + p.get_width() / 2, height),
+            ha="center",
+            va="bottom",
+            fontsize=8,
+            xytext=(0, 3),
+            textcoords="offset points"
+        )
+
     plt.tight_layout()
 
     plt.savefig(
@@ -212,11 +263,11 @@ def save_selected_examples(exp_dir, dataset_root, dataset_name="internal", top_k
     explain_dir = exp_dir / "explain" / dataset_name
 
     base_dir = (
-        get_visualization_dir(
-            exp_dir,
-            dataset_name=dataset_name
-        )
-        / "selected_examples"
+            get_visualization_dir(
+                exp_dir,
+                dataset_name=dataset_name
+            )
+            / "selected_examples"
     )
     base_dir.mkdir(parents=True, exist_ok=True)
 
@@ -274,8 +325,8 @@ def save_selected_examples(exp_dir, dataset_root, dataset_name="internal", top_k
             p2, p98 = np.percentile(rgb[..., c], (2, 98))
             rgb[..., c] = np.clip(rgb[..., c], p2, p98)
             rgb[..., c] = (
-                rgb[..., c] - p2
-            ) / (p98 - p2 + 1e-8)
+                                  rgb[..., c] - p2
+                          ) / (p98 - p2 + 1e-8)
 
         rgb = (rgb * 255).astype(np.uint8)
 
@@ -288,9 +339,9 @@ def save_selected_examples(exp_dir, dataset_root, dataset_name="internal", top_k
         prob_path = results_dir / "probs" / f"prob_{image_id}.npy"
 
         if not (
-            gt_path.exists()
-            and pred_path.exists()
-            and prob_path.exists()
+                gt_path.exists()
+                and pred_path.exists()
+                and prob_path.exists()
         ):
             print(f"Skipping {image_id}: missing GT/PRED/PROB")
             continue
@@ -308,13 +359,13 @@ def save_selected_examples(exp_dir, dataset_root, dataset_name="internal", top_k
 
         gt_contours, _ = cv2.findContours(
             gt,
-            cv2.RETR_EXTERNAL,
+            cv2.RETR_TREE,
             cv2.CHAIN_APPROX_SIMPLE
         )
 
         pred_contours, _ = cv2.findContours(
             pred,
-            cv2.RETR_EXTERNAL,
+            cv2.RETR_TREE,
             cv2.CHAIN_APPROX_SIMPLE
         )
 
@@ -387,7 +438,7 @@ def save_selected_examples(exp_dir, dataset_root, dataset_name="internal", top_k
             error_overlay,
             fp_contours,
             -1,
-            (255, 0, 0),   # red
+            (255, 0, 0),  # red
             2
         )
 
@@ -395,7 +446,7 @@ def save_selected_examples(exp_dir, dataset_root, dataset_name="internal", top_k
             error_overlay,
             fn_contours,
             -1,
-            (0, 0, 255),   # blue
+            (0, 0, 255),  # blue
             2
         )
 
@@ -408,9 +459,9 @@ def save_selected_examples(exp_dir, dataset_root, dataset_name="internal", top_k
         attribution_overlay = rgb.copy()
 
         band_csv = (
-            explain_dir
-            / image_id
-            / "band_importance.csv"
+                explain_dir
+                / image_id
+                / "band_importance.csv"
         )
 
         if band_csv.exists():
@@ -421,10 +472,10 @@ def save_selected_examples(exp_dir, dataset_root, dataset_name="internal", top_k
             )
 
             attr_path = (
-                explain_dir
-                / image_id
-                / "heatmaps"
-                / f"attr_band_{top_band:02d}.npy"
+                    explain_dir
+                    / image_id
+                    / "heatmaps"
+                    / f"attr_band_{top_band:02d}.npy"
             )
 
             if attr_path.exists():
@@ -435,7 +486,7 @@ def save_selected_examples(exp_dir, dataset_root, dataset_name="internal", top_k
                 attr = np.clip(attr, 0, vmax)
 
                 attr_uint8 = (
-                    attr / (vmax + 1e-8) * 255
+                        attr / (vmax + 1e-8) * 255
                 ).astype(np.uint8)
 
                 if attr_uint8.shape != gt.shape:
@@ -530,6 +581,288 @@ def save_selected_examples(exp_dir, dataset_root, dataset_name="internal", top_k
         plt.close()
 
 
+def plot_training_behavior(exp_dir):
+    """
+    Generate:
+        1. Combined training behavior plot
+        2. Individual plots:
+           - loss_curves.png
+           - mcc_curve.png
+           - iou_curve.png
+           - learning_rate_curve.png
+
+    Output directory:
+        runs/exp_xxx/visualizations/
+    """
+    metrics_path = exp_dir / "metrics.csv"
+
+    if not metrics_path.exists():
+        raise FileNotFoundError(metrics_path)
+
+    df = pd.read_csv(metrics_path)
+
+    vis_dir = get_visualization_dir(exp_dir, dataset_name=None)
+
+    # =====================================================
+    # BEST EPOCH
+    # =====================================================
+    best_idx = df["MCC"].idxmax()
+    best_epoch = df.loc[best_idx, "epoch"]
+    best_mcc = df.loc[best_idx, "MCC"]
+    best_iou = df.loc[best_idx, "IoU"]
+
+    # =====================================================
+    # 1. COMBINED FIGURE (2 x 2)
+    # =====================================================
+    fig, axes = plt.subplots(2, 2, figsize=(12, 8))
+
+    # ---------------- Loss Curves ----------------
+    sns.lineplot(
+        data=df,
+        x="epoch",
+        y="train_loss",
+        linewidth=2,
+        label="Train Loss",
+        ax=axes[0, 0]
+    )
+
+    sns.lineplot(
+        data=df,
+        x="epoch",
+        y="val_loss",
+        linewidth=2,
+        label="Validation Loss",
+        ax=axes[0, 0]
+    )
+
+    axes[0, 0].set_xlabel("Epoch")
+    axes[0, 0].set_ylabel("Loss")
+    axes[0, 0].legend()
+
+    # ---------------- MCC Curve ----------------
+    sns.lineplot(
+        data=df,
+        x="epoch",
+        y="MCC",
+        linewidth=2,
+        ax=axes[0, 1]
+    )
+
+    axes[0, 1].scatter(
+        [best_epoch],
+        [best_mcc],
+        s=100,
+        zorder=5
+    )
+
+    axes[0, 1].annotate(
+        f"{best_mcc:.4f}",
+        (best_epoch, best_mcc),
+        xytext=(5, 5),
+        textcoords="offset points"
+    )
+
+    axes[0, 1].set_xlabel("Epoch")
+    axes[0, 1].set_ylabel("MCC")
+    axes[0, 1].set_ylim(
+        max(0, df["MCC"].min() - 0.01),
+        min(1.0, df["MCC"].max() + 0.01)
+    )
+
+    # ---------------- IoU Curve ----------------
+    sns.lineplot(
+        data=df,
+        x="epoch",
+        y="IoU",
+        linewidth=2,
+        ax=axes[1, 0]
+    )
+
+    axes[1, 0].scatter(
+        [best_epoch],
+        [best_iou],
+        s=100,
+        zorder=5
+    )
+
+    axes[1, 0].annotate(
+        f"{best_iou:.4f}",
+        (best_epoch, best_iou),
+        xytext=(5, 5),
+        textcoords="offset points"
+    )
+
+    axes[1, 0].set_xlabel("Epoch")
+    axes[1, 0].set_ylabel("IoU")
+    axes[1, 0].set_ylim(0, 1.0)
+
+    # ---------------- Learning Rate ----------------
+    sns.lineplot(
+        data=df,
+        x="epoch",
+        y="lr",
+        linewidth=2,
+        ax=axes[1, 1]
+    )
+
+    axes[1, 1].set_xlabel("Epoch")
+    axes[1, 1].set_ylabel("Learning Rate")
+    axes[1, 1].ticklabel_format(
+        axis="y",
+        style="scientific",
+        scilimits=(0, 0)
+    )
+
+    plt.tight_layout()
+    plt.savefig(
+        vis_dir / "training_behavior.png",
+        dpi=300,
+        bbox_inches="tight"
+    )
+    plt.close()
+
+    # =====================================================
+    # 2. INDIVIDUAL PLOTS
+    # =====================================================
+
+    # ---------------- Loss Curves ----------------
+    fig, ax = plt.subplots(figsize=(8, 5))
+
+    sns.lineplot(
+        data=df,
+        x="epoch",
+        y="train_loss",
+        linewidth=2,
+        label="Train Loss",
+        ax=ax
+    )
+
+    sns.lineplot(
+        data=df,
+        x="epoch",
+        y="val_loss",
+        linewidth=2,
+        label="Validation Loss",
+        ax=ax
+    )
+
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Loss")
+    ax.legend()
+
+    plt.tight_layout()
+    plt.savefig(
+        vis_dir / "loss_curves.png",
+        dpi=300,
+        bbox_inches="tight"
+    )
+    plt.close()
+
+    # ---------------- MCC Curve ----------------
+    fig, ax = plt.subplots(figsize=(8, 5))
+
+    sns.lineplot(
+        data=df,
+        x="epoch",
+        y="MCC",
+        linewidth=2,
+        ax=ax
+    )
+
+    ax.scatter(
+        [best_epoch],
+        [best_mcc],
+        s=100,
+        zorder=5
+    )
+
+    ax.annotate(
+        f"{best_mcc:.4f}",
+        (best_epoch, best_mcc),
+        xytext=(5, 5),
+        textcoords="offset points"
+    )
+
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("MCC")
+    ax.set_ylim(
+        max(0, df["MCC"].min() - 0.01),
+        min(1.0, df["MCC"].max() + 0.01)
+    )
+
+    plt.tight_layout()
+    plt.savefig(
+        vis_dir / "mcc_curve.png",
+        dpi=300,
+        bbox_inches="tight"
+    )
+    plt.close()
+
+    # ---------------- IoU Curve ----------------
+    fig, ax = plt.subplots(figsize=(8, 5))
+
+    sns.lineplot(
+        data=df,
+        x="epoch",
+        y="IoU",
+        linewidth=2,
+        ax=ax
+    )
+
+    ax.scatter(
+        [best_epoch],
+        [best_iou],
+        s=100,
+        zorder=5
+    )
+
+    ax.annotate(
+        f"{best_iou:.4f}",
+        (best_epoch, best_iou),
+        xytext=(5, 5),
+        textcoords="offset points"
+    )
+
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("IoU")
+    ax.set_ylim(0, 1.0)
+
+    plt.tight_layout()
+    plt.savefig(
+        vis_dir / "iou_curve.png",
+        dpi=300,
+        bbox_inches="tight"
+    )
+    plt.close()
+
+    # ---------------- Learning Rate Curve ----------------
+    fig, ax = plt.subplots(figsize=(8, 5))
+
+    sns.lineplot(
+        data=df,
+        x="epoch",
+        y="lr",
+        linewidth=2,
+        ax=ax
+    )
+
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel("Learning Rate")
+    ax.ticklabel_format(
+        axis="y",
+        style="scientific",
+        scilimits=(0, 0)
+    )
+
+    plt.tight_layout()
+    plt.savefig(
+        vis_dir / "learning_rate_curve.png",
+        dpi=300,
+        bbox_inches="tight"
+    )
+    plt.close()
+
+
 # =====================================================
 # MAIN
 # =====================================================
@@ -548,6 +881,9 @@ def visualize(config):
     # 1. Internal vs External metric comparison
     print("Generating metric comparison...")
     plot_metric_comparison(exp_dir)
+
+    print("Generating training behavior plot...")
+    plot_training_behavior(exp_dir)
 
     # 2. Global band importance
     print("Generating global band importance...")
