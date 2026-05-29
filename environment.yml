@@ -25,9 +25,10 @@ dependencies:
   - bottleneck=1.4.2=py310h540bb41_1
   - brotlicffi=1.2.0.0=py310h885b0b7_0
   - bzip2=1.0.8=h2bbff1b_6
-  - ca-certificates=2026.1.4=h4c7d964_0
+  - ca-certificates=2026.3.19=haa95532_0
   - cairo=1.18.4=he9e932c_0
-  - certifi=2026.01.04=py310haa95532_0
+  - captum=0.7.0=py310haa95532_0
+  - certifi=2026.4.22=py310haa95532_0
   - cffi=2.0.0=py310h02ab6af_1
   - charset-normalizer=3.4.4=py310haa95532_0
   - click=8.1.8=py310haa95532_0
@@ -279,6 +280,8 @@ dependencies:
       - rioxarray==0.19.0
       - shapely==2.1.2
       - torchaudio==2.2.2
+      - torchinfo==1.8.0
+      - torchsummary==1.5.1
       - torchvision==0.17.2
       - xarray==2025.6.1
       - xdem==0.2.3
